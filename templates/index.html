@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Проверка оформления чертежа — СПДС / ЕСКД</title>
+  <style>
+    :root {
+      --bg: #eef2ef;
+      --ink: #15231c;
+      --muted: #5b6b63;
+      --card: #ffffff;
+      --line: #d5ddd8;
+      --accent: #0d6b4c;
+      --accent-dark: #0a523a;
+      --soft: #e4f3ec;
+      --warn: #9a6b12;
+      --warn-bg: #fff6de;
+      --err: #b42318;
+      --ok: #1b7a45;
+      --info: #1a5f8a;
+      --shadow: 0 10px 40px rgba(21, 35, 28, .08);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: "Segoe UI", "Noto Sans", "PT Sans", "DejaVu Sans", sans-serif;
+      background:
+        radial-gradient(1200px 480px at 10% -10%, #d9efe4 0%, transparent 55%),
+        radial-gradient(900px 420px at 110% 0%, #f3e6cf 0%, transparent 50%),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 18px 48px; }
+    header { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
+    .mark {
+      width: 52px; height: 52px; border-radius: 14px; flex: 0 0 auto;
+      background: var(--accent); color: #fff; display: grid; place-items: center;
+      font-weight: 800; letter-spacing: -.04em; box-shadow: var(--shadow);
+    }
+    h1 { font-size: clamp(1.5rem, 4vw, 2rem); margin: 0 0 6px; letter-spacing: -.03em; }
+    .lead { margin: 0; color: var(--muted); max-width: 46rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 22px; margin-top: 18px; box-shadow: var(--shadow);
+    }
+    h2 { font-size: 1.2rem; margin: 0 0 12px; }
+    h3 { font-size: 1.02rem; margin: 20px 0 10px; }
+    .drop {
+      border: 2px dashed #b7c7be; border-radius: 14px; padding: 28px 18px; text-align: center;
+      background: #f8fbf9; cursor: pointer; transition: border-color .15s, background .15s;
+    }
+    .drop:hover, .drop.over { border-color: var(--accent); background: var(--soft); }
+    .drop strong { display: block; font-size: 1.05rem; }
+    .drop span { color: var(--muted); font-size: .92rem; }
+    .filechip {
+      display: none; margin-top: 12px; padding: 8px 12px; border-radius: 999px;
+      background: var(--soft); color: var(--accent-dark); font-weight: 600;
+    }
+    .opts { display: grid; gap: 10px; margin-top: 18px; }
+    .opt {
+      display: flex; gap: 10px; align-items: flex-start; padding: 12px;
+      border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb;
+    }
+    .opt input { margin-top: 3px; }
+    label { font-weight: 600; display: block; margin: 0 0 6px; }
+    .grid label { color: var(--ink); }
+    .hint { display: block; color: var(--muted); font-weight: 400; font-size: .9rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } header { flex-direction: column; } }
+    input[type=text], select {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+      background: #fff; font: inherit; color: inherit;
+    }
+    details { margin-top: 14px; }
+    summary { cursor: pointer; color: var(--accent-dark); font-weight: 650; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+    button.primary {
+      background: var(--accent); color: #fff; border: 0; border-radius: 12px;
+      padding: 12px 22px; font-size: 1rem; font-weight: 700; cursor: pointer;
+    }
+    button.primary:disabled { opacity: .6; cursor: wait; }
+    button.primary:hover:not(:disabled) { background: var(--accent-dark); }
+    #status { color: var(--muted); margin: 0; }
+    .progress { display: none; margin-top: 16px; }
+    .progress.on { display: block; }
+    .bar { height: 8px; background: #e3ebe6; border-radius: 99px; overflow: hidden; }
+    .bar > i {
+      display: block; height: 100%; width: 30%; border-radius: 99px; background: var(--accent);
+      animation: load 1.1s ease-in-out infinite;
+    }
+    @keyframes load { 0% { transform: translateX(-80%); } 100% { transform: translateX(280%); } }
+    .steps { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; color: var(--muted); font-size: .9rem; }
+    .steps b { color: var(--accent-dark); }
+    .summary { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+      border-radius: 999px; background: #f3f6f4; border: 1px solid var(--line); font-size: .92rem;
+    }
+    .check {
+      border: 1px solid var(--line); border-left: 5px solid #8a8a8a; border-radius: 12px;
+      padding: 12px 14px; margin: 10px 0; background: #fff;
+    }
+    .check.ok { border-left-color: var(--ok); }
+    .check.info { border-left-color: var(--info); }
+    .check.warning { border-left-color: var(--warn); }
+    .check.error { border-left-color: var(--err); }
+    .check .top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .check .gost { color: var(--muted); font-size: .88rem; }
+    .sev { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; font-weight: 800; }
+    .check.ok .sev { color: var(--ok); }
+    .check.info .sev { color: var(--info); }
+    .check.warning .sev { color: var(--warn); }
+    .check.error .sev { color: var(--err); }
+    .check ul { margin: 8px 0 0; padding-left: 1.1rem; color: var(--muted); }
+    table.gridtab { border-collapse: collapse; width: 100%; background: #fff; }
+    table.gridtab th, table.gridtab td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+    table.gridtab th { background: #f4f7f5; }
+    tr.ok td:last-child { color: var(--ok); font-weight: 700; }
+    tr.fail td:last-child { color: var(--err); font-weight: 700; }
+    .previews { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .previews figure { margin: 0; background: #f8faf8; border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+    .previews img { width: 100%; height: auto; display: block; background: #fff; border-radius: 8px; }
+    .previews figcaption { font-size: .88rem; color: var(--muted); margin-bottom: 6px; }
+    .files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .files a {
+      display: inline-block; padding: 8px 12px; border-radius: 10px; background: var(--soft);
+      color: var(--accent-dark); text-decoration: none; font-weight: 650; border: 1px solid #cfe3d8;
+    }
+    .warn {
+      background: var(--warn-bg); border-left: 4px solid var(--warn); padding: 10px 12px;
+      border-radius: 0 10px 10px 0; color: #5c4310;
+    }
+    .privacy { color: var(--muted); font-size: .92rem; }
+    iframe.report { width: 100%; height: 640px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+    footer {
+      margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line);
+      color: var(--muted); font-size: .92rem;
+    }
+    footer a { color: var(--accent-dark); }
+    .sw { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: middle; border: 1px solid #999; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="mark" aria-hidden="true">ГО</div>
+      <div>
+        <h1>Проверка оформления чертежа</h1>
+        <p class="lead">Бесплатный сервис для студенческих и учебных чертежей. Загрузите DXF, DWG, PDF или скан — получите отчёт по отдельным правилам СПДС / ЕСКД и, для CAD-файлов, осторожно исправленный файл. Это не официальный нормоконтроль и не «приведение любого чертежа ко всем ГОСТам».</p>
+      </div>
+    </header>
+
+    <form id="form" class="card">
+      <h2>Загрузить чертёж</h2>
+      <input id="file" name="file" type="file" required hidden
+             accept=".dxf,.dwg,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
+      <input type="hidden" name="preview" value="true">
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Выбрать файл чертежа">
+        <strong>Перетащите файл сюда или нажмите, чтобы выбрать</strong>
+        <span>DXF, DWG, PDF, PNG, JPG · не больше 80 МБ</span>
+        <div class="filechip" id="filechip"></div>
+      </div>
+
+      <div class="opts">
+        <label class="opt">
+          <input type="checkbox" id="fix" name="fix" checked>
+          <span>Внести безопасные исправления<span class="hint">Рамка и штамп, если их нет; сдвиг наложений; шрифты и размерный стиль. Только для DXF/DWG. Скан и PDF не изменяются.</span></span>
+        </label>
+        <label class="opt">
+          <input type="checkbox" id="assign" name="assign_layers" value="true">
+          <span>Перенести объекты на слои СПДС<span class="hint">Эвристика по толщине, типу линии и тексту. По умолчанию выключено.</span></span>
+        </label>
+      </div>
+
+      <div class="grid" style="margin-top:16px">
+        <div>
+          <label for="fmt">Формат листа, если рамка не найдена</label>
+          <select id="fmt" name="sheet_format">
+            <option>A4</option>
+            <option selected>A3</option>
+            <option>A2</option>
+            <option>A1</option>
+            <option>A0</option>
+            <option>A3x3</option>
+            <option>A4x3</option>
+          </select>
+        </div>
+      </div>
+
+      <h3>Поля основной надписи</h3>
+      <p class="hint">Подставляются, если программа добавит штамп формы 3.</p>
+      <div class="grid">
+        <div><label>Обозначение</label><input name="обозначение" placeholder="КЖ-01" autocomplete="off"></div>
+        <div><label>Наименование</label><input name="наименование" placeholder="План подземной части" autocomplete="off"></div>
+        <div><label>Разраб.</label><input name="разраб" placeholder="Иванов" autocomplete="name"></div>
+        <div><label>Пров.</label><input name="пров" autocomplete="off"></div>
+        <div><label>Организация</label><input name="организация" placeholder="СПбГАСУ" autocomplete="organization"></div>
+        <div><label>Стадия</label><input name="стадия" placeholder="Р" autocomplete="off"></div>
+      </div>
+      <details>
+        <summary>Дополнительные графы</summary>
+        <div class="grid" style="margin-top:12px">
+          <div><label>Объект / предприятие</label><input name="объект"></div>
+          <div><label>Здание / сооружение</label><input name="здание"></div>
+          <div><label>Лист</label><input name="лист" placeholder="1"></div>
+          <div><label>Листов</label><input name="листов" placeholder="1"></div>
+          <div><label>Н.контр.</label><input name="н_контр"></div>
+          <div><label>Утв.</label><input name="утв"></div>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="go">Проверить чертёж</button>
+        <p id="status"></p>
+      </div>
+      <div class="progress" id="progress">
+        <div class="bar"><i></i></div>
+        <div class="steps" id="steps">Идёт проверка…</div>
+      </div>
+    </form>
+
+    <section class="card hidden" id="result">
+      <h2>Результат</h2>
+      <div class="summary" id="summary"></div>
+      <p class="warn" id="disclaimer"></p>
+      <div id="checks"></div>
+      <div id="margins-wrap" class="hidden">
+        <h3>Поля рамки</h3>
+        <table class="gridtab" id="margins">
+          <thead><tr><th>Сторона</th><th>Факт, мм</th><th>Норма, мм</th><th>Сходимость</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="lines-wrap" class="hidden">
+        <h3>Линии</h3>
+        <p id="lines-s" class="privacy"></p>
+        <table class="gridtab" id="lines">
+          <thead><tr><th>Тип</th><th>Количество</th><th>Длина, мм</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="previews" id="previews"></div>
+      <h3>Скачать</h3>
+      <div class="files" id="files"></div>
+      <h3>Полный отчёт</h3>
+      <iframe class="report" id="report" title="Отчёт HTML"></iframe>
+    </section>
+
+    <footer>
+      <p class="privacy" id="privacy">Загруженные файлы обрабатываются на этом сервере и автоматически удаляются примерно через час. Чертежи не передаются третьим лицам и не используются ни для чего, кроме этой проверки.</p>
+      <p class="warn">Программа не заменяет нормоконтроль. Отчёт не является официальным заключением о соответствии ГОСТ, СПДС или ЕСКД.</p>
+      <p>
+        Автор: Пащенко Владимир ·
+        Telegram: <a href="https://t.me/Faringeits0">@Faringeits0</a> ·
+        <a href="https://kpoy888.github.io/reviews-miniapp/">Отзывы и мини-приложение</a>
+      </p>
+    </footer>
+  </div>
+<script>
+const form = document.getElementById("form");
+const fileInput = document.getElementById("file");
+const drop = document.getElementById("drop");
+const chip = document.getElementById("filechip");
+const SEV = { ok: "соответствует", info: "сведение", warning: "замечание", error: "ошибка" };
+
+function showFile(file) {
+  if (!file) { chip.style.display = "none"; return; }
+  chip.style.display = "inline-block";
+  chip.textContent = file.name + " · " + Math.max(1, Math.round(file.size / 1024)) + " КБ";
+}
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fileInput.click(); } });
+["dragenter", "dragover"].forEach((name) => drop.addEventListener(name, (ev) => { ev.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((name) => drop.addEventListener(name, (ev) => { ev.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (ev) => {
+  const file = ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if (!file) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  fileInput.files = dt.files;
+  showFile(file);
+});
+fileInput.addEventListener("change", () => showFile(fileInput.files[0]));
+
+function detailText(payload) {
+  if (!payload) return "неизвестная ошибка";
+  if (typeof payload.detail === "string") return payload.detail;
+  if (Array.isArray(payload.detail)) return payload.detail.map((x) => x.msg || x).join("; ");
+  return payload.message || JSON.stringify(payload);
+}
+
+form.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const go = document.getElementById("go");
+  const status = document.getElementById("status");
+  const progress = document.getElementById("progress");
+  const steps = document.getElementById("steps");
+  if (!fileInput.files[0]) { status.textContent = "Выберите файл чертежа."; return; }
+  go.disabled = true;
+  progress.classList.add("on");
+  steps.innerHTML = "<b>1. Загрузка</b> → 2. Проверка правил → 3. Отчёт";
+  status.textContent = "Отправляю файл…";
+  const data = new FormData(form);
+  if (!document.getElementById("fix").checked) data.set("fix", "false");
+  const tick = setTimeout(() => { steps.innerHTML = "1. Загрузка → <b>2. Проверка правил</b> → 3. Отчёт"; status.textContent = "Проверяю оформление…"; }, 400);
+  try {
+    const res = await fetch("/api/check", { method: "POST", body: data });
+    let payload = {};
+    try { payload = await res.json(); } catch (e) { payload = {}; }
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    steps.innerHTML = "1. Загрузка → 2. Проверка правил → <b>3. Отчёт готов</b>";
+    renderResult(payload);
+    status.textContent = "Готово.";
+    document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    status.textContent = "Ошибка: " + err.message;
+  } finally {
+    clearTimeout(tick);
+    go.disabled = false;
+    progress.classList.remove("on");
+  }
+});
+
+function renderResult(payload) {
+  document.getElementById("result").classList.remove("hidden");
+  const s = payload.summary || {};
+  document.getElementById("summary").innerHTML =
+    pill("соответствует", s.ok || 0) +
+    pill("сведения", s.info || 0) +
+    pill("замечания", s.warning || 0) +
+    pill("ошибки", s.error || 0) +
+    pill("автоисправлений", s.fixed || 0);
+  document.getElementById("disclaimer").textContent = payload.disclaimer || "";
+  if (payload.privacy) document.getElementById("privacy").textContent = payload.privacy;
+
+  const box = document.getElementById("checks");
+  box.innerHTML = "";
+  (payload.checks || []).forEach((check) => {
+    const el = document.createElement("article");
+    el.className = "check " + (check.severity || "");
+    const details = (check.details || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+    el.innerHTML =
+      `<div class="top"><strong>${escapeHtml(check.title || check.id)}</strong>` +
+      `<span class="sev">${SEV[check.severity] || check.severity || ""}</span></div>` +
+      `<div class="gost">${escapeHtml(check.gost || "")}</div>` +
+      `<p>${escapeHtml(check.message || "")}</p>` +
+      (details ? `<ul>${details}</ul>` : "");
+    box.appendChild(el);
+  });
+
+  const mw = document.getElementById("margins-wrap");
+  const mb = document.querySelector("#margins tbody");
+  mb.innerHTML = "";
+  const margins = payload.margins_table || [];
+  mw.classList.toggle("hidden", margins.length === 0);
+  margins.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.className = row.ok ? "ok" : "fail";
+    tr.innerHTML = `<td>${escapeHtml(row.side)}</td><td>${Number(row.value).toFixed(2)}</td><td>${Number(row.required).toFixed(2)}</td><td>${row.ok ? "да" : "нет"}</td>`;
+    mb.appendChild(tr);
+  });
+
+  const lw = document.getElementById("lines-wrap");
+  const lb = document.querySelector("#lines tbody");
+  lb.innerHTML = "";
+  const lines = payload.lines || {};
+  const kinds = lines.kinds || [];
+  lw.classList.toggle("hidden", kinds.length === 0);
+  document.getElementById("lines-s").textContent = kinds.length
+    ? `S основной ≈ ${lines.s_main_mm ?? "—"} мм, объектов: ${lines.total ?? 0}.`
+    : "";
+  kinds.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="sw" style="background:${row.color || "#444"}"></span>${escapeHtml(row.title || row.kind)}</td><td>${row.count}</td><td>${row.length_mm}</td>`;
+    lb.appendChild(tr);
+  });
+
+  const previews = document.getElementById("previews");
+  previews.innerHTML = "";
+  [
+    [payload.before_url, "Просмотр до исправления"],
+    [payload.after_url, "Просмотр после исправления"],
+    [payload.overlay_url, "Цветная схема линий"],
+  ].forEach(([url, caption]) => {
+    if (!url) return;
+    const fig = document.createElement("figure");
+    fig.innerHTML = `<figcaption>${caption}</figcaption><img alt="${caption}" src="${url}">`;
+    previews.appendChild(fig);
+  });
+
+  const files = document.getElementById("files");
+  files.innerHTML = "";
+  (payload.downloads || []).forEach((item) => {
+    const a = document.createElement("a");
+    a.href = item.url;
+    a.textContent = item.title;
+    a.setAttribute("download", item.filename || "");
+    files.appendChild(a);
+  });
+  const report = document.getElementById("report");
+  if (payload.report_url) report.src = payload.report_url;
+}
+
+function pill(label, value) {
+  return `<span class="pill">${label}: <b>${value}</b></span>`;
+}
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+</script>
+</body>
+</html>

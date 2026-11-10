@@ -1,0 +1,23 @@
+# Blueprint Render: бесплатный веб-сервис из Dockerfile.
+# https://render.com/docs/blueprint-spec
+# https://render.com/docs/free
+services:
+  - type: web
+    name: gost-checker
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: MPLBACKEND
+        value: Agg
+      - key: GOST_LIGHT_MEMORY
+        value: "1"
+      - key: GOST_MAX_IMAGE_SIDE
+        value: "1600"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: BUILD_LIBREDWG
+        value: "0"

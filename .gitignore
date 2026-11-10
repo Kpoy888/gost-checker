@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+out/
+gost-out/
+vendor/*.AppImage
+vendor/squashfs-root/
+vendor/
+.hypothesis/
+.ruff_cache/
+*.zip
