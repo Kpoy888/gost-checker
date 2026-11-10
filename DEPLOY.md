@@ -2,17 +2,117 @@
 
 Сайт — тот же `gost-checker`: страница на русском, загрузка чертежа (DXF, PDF, PNG/JPG), отчёт и исправленный DXF. Платные облачные API не нужны.
 
-**Hugging Face Spaces с Docker SDK больше не подходит как бесплатный путь:** и Docker, и обычный Gradio (CPU Basic) требуют платный план. Бесплатными на HF остаются статические Spaces и до двух ZeroGPU (это GPU/PyTorch, не наш CPU-сервис с Tesseract). Обёртка приложения в Gradio бесплатного железа не даёт.
+**Hugging Face Spaces с Docker SDK не подходит как бесплатный путь:** и Docker, и обычный Gradio (CPU Basic) требуют платный план. Бесплатными на HF остаются статические Spaces и до двух ZeroGPU (это GPU/PyTorch, не наш CPU-сервис с Tesseract). Обёртка приложения в Gradio бесплатного хостинга не даёт.
 
-Выбранный хост: **Render, бесплатный Web Service из Docker**. Карта не нужна.
+Облачные платформы, которые мы проверяли (Hugging Face, Render, Koyeb, Fly.io, Railway, Google Cloud Run), на ноябрь 2026 либо платные, либо при регистрации просят банковскую карту — даже если сам тариф называется Free.
 
-Официальные страницы:
+**Актуальный путь без аккаунта и без карты:** запустить сайт на Linux-компьютере и открыть его в интернет через Cloudflare Quick Tunnel (`trycloudflare.com`). Аккаунт Cloudflare не нужен. Скрипт: [`scripts/run_public.sh`](scripts/run_public.sh).
+
+Раздел про Render ниже оставлен на случай, если карта у вас уже есть и вы всё же хотите облачный хостинг.
+
+Официальные страницы Render (если пойдёте этим путём):
 
 - тарифы: <https://render.com/pricing>
 - ограничения Free: <https://render.com/docs/free>
 - первый деплой («This tutorial uses free Render resources. No payment is required.»): <https://render.com/docs/your-first-deploy>
 - Blueprint (`render.yaml`): <https://render.com/docs/blueprint-spec>
 - минуты сборки: <https://render.com/docs/build-pipeline>
+
+
+## Свой компьютер + Cloudflare Quick Tunnel (без аккаунта и без карты)
+
+Так сайт работает прямо у вас (или на учебной машине): локально слушает порт `7860`, а наружу Cloudflare выдаёт временный адрес `https://….trycloudflare.com`. Карту и регистрацию не спрашивают.
+
+### Что будет запущено
+
+1. Веб-сервер в цикле `scripts/serve_forever.sh` — если процесс упадёт, он сам поднимется снова. Лог: `logs/web.log`.
+2. Туннель в цикле `scripts/tunnel_forever.sh`: команда  
+   `cloudflared tunnel --url http://localhost:7860 --no-autoupdate`.  
+   Лог: `logs/tunnel.log`. Свежий публичный адрес пишется в `PUBLIC_URL.txt`.
+
+**Адрес Quick Tunnel меняется при каждом перезапуске `cloudflared`.** Это не постоянное имя. После `stop` / перезагрузки компьютера / падения туннеля откройте `PUBLIC_URL.txt` или `logs/tunnel.log` и возьмите новый URL.
+
+Официальные материалы Cloudflare: [Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) и бинарник [cloudflared Releases](https://github.com/cloudflare/cloudflared/releases) (`cloudflared-linux-amd64` для обычного 64-битного Linux).
+
+### Шаги на своём Linux-ПК
+
+1. Скопируйте проект (из GitHub `Kpoy888/gost-checker` или из `gost-site.zip`) и установите зависимости:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip tesseract-ocr tesseract-ocr-rus curl
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+# по желанию, чтобы открывать DWG:
+# bash scripts/install_dwg.sh
+```
+
+2. Из корня проекта:
+
+```bash
+bash scripts/run_public.sh
+```
+
+Скрипт сам скачает официальный `cloudflared` (в `~/.local/bin/cloudflared`, на этой учебной машине — в `/workspace/bin/cloudflared`), поднимет сайт и туннель и напечатает публичный адрес.
+
+3. Откройте напечатанный `https://….trycloudflare.com` в браузере. Локально страница также доступна как `http://127.0.0.1:7860/`.
+
+Полезные команды:
+
+```bash
+bash scripts/run_public.sh status   # PID и текущий публичный адрес
+bash scripts/run_public.sh stop     # остановить сайт и туннель
+# после stop снова:
+bash scripts/run_public.sh          # будет НОВЫЙ адрес trycloudflare.com
+```
+
+Перезапуск «вручную» (если не пользуетесь `run_public.sh`):
+
+```bash
+# остановить
+kill "$(cat logs/web.supervisor.pid)" "$(cat logs/tunnel.supervisor.pid)"
+# запустить
+nohup bash scripts/serve_forever.sh >> logs/web.supervisor.out 2>&1 &
+nohup bash scripts/tunnel_forever.sh >> logs/tunnel.supervisor.out 2>&1 &
+cat PUBLIC_URL.txt
+```
+
+### Ограничения Quick Tunnel
+
+- URL случайный и **непостоянный** (меняется после рестарта туннеля).
+- Для учебной публикации и демонстрации этого достаточно; постоянное своё доменное имя потребовало бы аккаунта Cloudflare и настроенного Named Tunnel.
+- Компьютер должен быть включён и иметь доступ в интернет, пока кто-то открывает сайт.
+- Загруженные чертежи живут на этой машине около часа (`JOB_TTL_SEC = 3600`) и пропадают при перезапуске процесса.
+- Если браузер показывает ошибку Cloudflare **530** (Tunnel error / 1033), адрес `trycloudflare.com` уже выдан, но процесс не смог подключиться к сети Cloudflare. Так бывает, когда провайдер или учебный/корпоративный прокси закрывает исходящие UDP/TCP на порту **7844** (протокол туннеля). Сайт при этом всё равно работает локально: `http://127.0.0.1:7860/`. Можно повторить запуск с `--protocol http2`; если не поможет — выполните `bash scripts/run_public.sh` на домашнем Linux с обычным интернетом (без перехвата DNS и без блокировки 7844). Документация Cloudflare: <https://developers.cloudflare.com/tunnel/troubleshooting/>.
+
+### Запасные туннели (без карты)
+
+Если Cloudflare Quick Tunnel выдаёт 530, `scripts/run_public.sh` сам переключается на `scripts/tunnel_alt_forever.sh`. Можно выбрать сервис явно:
+
+```bash
+TUNNEL_ALT=pinggy bash scripts/run_public.sh
+# или только запасной цикл:
+TUNNEL_ALT=localtunnel nohup bash scripts/tunnel_alt_forever.sh >> logs/tunnel_alt.supervisor.out 2>&1 &
+```
+
+Порядок в режиме `TUNNEL_ALT=auto`: localtunnel → pinggy → serveo → localhost.run → tunnelmole → bore.
+
+| Сервис | Как поднимается | Ограничения |
+| --- | --- | --- |
+| localtunnel (`npx localtunnel --port 7860`) | URL `https://….loca.lt`. Клиент открывает сырой TCP на случайный порт сервера. | Бывает промежуточная страница; для API добавьте заголовок `bypass-tunnel-reminder: true`. |
+| Pinggy | `ssh -p 443 -R0:localhost:7860 a.pinggy.io` | Бесплатная сессия около **60 минут**, потом нужен новый запуск и будет новый URL. Иногда показывают предупреждение. |
+| serveo.net | `ssh -R 80:localhost:7860 serveo.net` (порт 22) | Адрес вида `https://….serveo.net`. Сервис иногда недоступен. |
+| localhost.run | `ssh -p 443 -R 80:localhost:7860 nokey@localhost.run` | Адрес `https://….lhr.life` / `….localhost.run`. Аккаунт не нужен. |
+| tunnelmole | `npx tunnelmole 7860` | Ходит по WebSocket на `service.tunnelmole.com:8083` (это не 443). |
+| bore.pub | `bore local 7860 --to bore.pub` | Обычно `http://bore.pub:<порт>`, без HTTPS. |
+| zrok | нужен бесплатный аккаунт и `zrok enable` | Пропускаем, пока не исчерпаны варианты без регистрации. |
+| ngrok | нужен бесплатный аккаунт и authtoken | Запасной платный-по-регистрации вариант, скриптами не запускается. |
+
+`cloudflared` не умеет строить dataplane Quick Tunnel через обычный HTTPS на порту 443: используются QUIC/HTTP2 на **7844**. Флаги `--protocol http2` и `--edge-ip-version auto` / `--region us` эту блокировку не обходят.
+
+На сети, которая подменяет DNS и пропускает наружу только обычный HTTPS (без SSH, без произвольных TCP-портов и без WebSocket), ни один из перечисленных туннелей не поднимет dataplane — сайт останется на `http://127.0.0.1:7860/`. Тогда запустите `bash scripts/run_public.sh` на домашнем Linux с обычным интернетом.
+
+## Render (если готовы указать карту)
 
 ## Лимиты бесплатного тарифа Render
 
@@ -39,6 +139,7 @@ DWG на бесплатном деплое по умолчанию **не чит
 - `Dockerfile`, `render.yaml`, `requirements.txt`, `README.md`
 - `gost_check.py`, каталоги `gost_checker/` и `templates/`
 - `scripts/install_dwg.sh` (понадобится, только если потом включите сборку LibreDWG)
+- `scripts/run_public.sh`, `scripts/serve_forever.sh`, `scripts/tunnel_forever.sh`, `scripts/tunnel_alt_forever.sh`
 - полезно: `DEPLOY.md`, `samples/titleblock_example.json`, учебные `samples/bad.dxf` и остальные примеры, `tests/`
 
 ## Способ А. Blueprint из `render.yaml` (предпочтительный)

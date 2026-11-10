@@ -127,9 +127,9 @@ python -m gost_checker.web
 # откройте http://127.0.0.1:7860
 ```
 
-Публичный сайт без карты и без оплаты за API выкладывается на [Render](https://render.com) (бесплатный Web Service из Docker, план `free`: 0,1 CPU / 512 МБ). В репозитории есть `render.yaml` и `Dockerfile`. Подробные шаги с нажатиями кнопок — в [`DEPLOY.md`](DEPLOY.md). Контейнер слушает `$PORT` (так задаёт Render) или `7860`.
+Публичный сайт без карты: запустите его на своём Linux-компьютере (`bash scripts/run_public.sh`). Скрипт сначала пробует Cloudflare Quick Tunnel (`https://….trycloudflare.com`, аккаунт не нужен), а если снаружи нет ответа — запасные туннели (localtunnel, Pinggy, serveo, localhost.run и др.). Адрес меняется при перезапуске туннеля. Подробности — в [`DEPLOY.md`](DEPLOY.md).
 
-На ноябрь 2026 Hugging Face Spaces с Docker SDK и обычный Gradio Space на CPU Basic требуют платный план; обёртка интерфейса в Gradio бесплатного хостинга не даёт. YAML-шапка в начале файла оставлена на случай, если Docker Space вам доступен по подписке.
+Облачные «бесплатные» хосты (Render, Hugging Face Docker/Gradio CPU Basic и др.) на ноябрь 2026 как правило просят карту или платный план. В репозитории по-прежнему есть `render.yaml` и `Dockerfile`, если облако вам подходит. Контейнер слушает `$PORT` или `7860`.
 
 Можно также вызвать `python gost_check.py …` из корня проекта.
 

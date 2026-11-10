@@ -13,3 +13,5 @@ vendor/
 .hypothesis/
 .ruff_cache/
 *.zip
+logs/
+PUBLIC_URL.txt
