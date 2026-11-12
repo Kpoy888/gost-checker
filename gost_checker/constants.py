@@ -194,9 +194,10 @@ SCALES_ENLARGEMENT = (
 )
 
 # ГОСТ 2.307 / ГОСТ Р 21.101-2020 п. 5.4.2: засечки 2–4 мм.
+# Высота размерных чисел — из ряда ГОСТ 2.304, но не ниже 2,5 мм (ГОСТ Р 21.101).
 DIM_TICK_MIN_MM = 2.0
 DIM_TICK_MAX_MM = 4.0
-DIM_TXT_PREFERRED_MM = (2.5, 3.5, 5.0)
+DIM_TXT_PREFERRED_MM = (2.5, 3.5, 5.0, 7.0, 10.0, 14.0, 20.0)
 DIM_EXE_MIN_MM = 1.0
 DIM_EXE_MAX_MM = 5.0
 SPDS_DIMSTYLE = "SPDS"

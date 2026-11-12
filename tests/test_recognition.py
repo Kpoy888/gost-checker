@@ -5,7 +5,7 @@ from pathlib import Path
 import ezdxf
 
 from gost_checker.checks import ALL_CHECKS
-from gost_checker.constants import FONT_HEIGHTS_PRIMARY_MM
+from gost_checker.constants import FONT_HEIGHTS_MM
 from gost_checker.engine import process_file
 from gost_checker.frame_geometry import match_format
 
@@ -67,8 +67,9 @@ def test_primechanie_snaps_to_gost_row(samples_dir, tmp_path):
     notes = [entity for entity in doc.modelspace().query("TEXT") if "Примечание" in (entity.dxf.text or "")]
     assert notes
     height = float(notes[0].dxf.height)
-    assert height <= 7.05
-    nearest = min(FONT_HEIGHTS_PRIMARY_MM, key=lambda item: abs(item - height))
+    # 11 мм по ГОСТ 2.304-81 ближе к 10 мм, а не к искусственному потолку 7 мм.
+    assert abs(height - 10.0) < 0.15
+    nearest = min(FONT_HEIGHTS_MM, key=lambda item: abs(item - height))
     assert abs(height - nearest) < 0.15
 
 
@@ -84,7 +85,7 @@ def test_mtext_inline_height_rewritten(tmp_path):
     entity = next(iter(fixed.modelspace().query("MTEXT")))
     assert abs(float(entity.dxf.char_height) - 5.0) < 0.2
     raw = str(entity.dxf.text or "").replace(" ", "")
-    assert "\\H7" in raw or "\\H7.0" in raw
+    assert "\\H10" in raw
 
 
 def test_line_overlay_created(samples_dir, tmp_path):

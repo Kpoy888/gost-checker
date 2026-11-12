@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from ..constants import (
-    FONT_HEIGHTS_PRIMARY_MM,
+    FONT_HEIGHTS_MM,
     GOST_FONT_FILE,
     GOST_FONT_MARKERS,
     NON_GOST_FONT_MARKERS,
@@ -28,7 +28,8 @@ def is_explicit_non_gost(name: str) -> bool:
 
 
 def nearest_height(height_mm: float) -> float:
-    return min(FONT_HEIGHTS_PRIMARY_MM, key=lambda item: abs(item - height_mm))
+    # Полный ряд ГОСТ 2.304-81, включая 10, 14, 20, 28 и 40 мм.
+    return min(FONT_HEIGHTS_MM, key=lambda item: abs(item - height_mm))
 
 
 def _style_font(style) -> str:
@@ -39,7 +40,6 @@ def _style_font(style) -> str:
 
 
 MTEXT_H_RE = re.compile(r"\\H([0-9]+(?:[.,][0-9]+)?)(x)?;", re.IGNORECASE)
-DRAWING_TEXT_MAX_MM = 7.0
 
 
 def style_fixed_height(doc, style_name: str) -> float:
@@ -75,10 +75,9 @@ def rewrite_mtext_heights(raw: str, snap) -> str:
 
 
 def snap_drawing_height(height_mm: float, *, allow_large: bool = False) -> float:
-    target = nearest_height(height_mm)
-    if not allow_large and height_mm > DRAWING_TEXT_MAX_MM + 0.12 and target > DRAWING_TEXT_MAX_MM:
-        return DRAWING_TEXT_MAX_MM
-    return target
+    """Ближайшая высота из ряда ГОСТ 2.304-81. Параметр allow_large оставлен для совместимости вызовов."""
+    del allow_large
+    return nearest_height(height_mm)
 
 
 def _entity_height(entity, doc=None) -> float | None:
@@ -139,7 +138,7 @@ def _iter_text_entities(doc):
 class FontsCheck(BaseCheck):
     id = "fonts"
     title = "Шрифты и высоты текста"
-    gost = "ГОСТ 2.304-81 (чертёжные шрифты типа А/Б; ряд высот 1,8; 2,5; 3,5; 5; 7; 10; 14; 20 мм)"
+    gost = "ГОСТ 2.304-81 (чертёжные шрифты типа А/Б; ряд высот 1,8; 2,5; 3,5; 5; 7; 10; 14; 20; 28; 40 мм)"
     can_autofix = True
 
     def run(self, ctx: CheckContext):
@@ -220,7 +219,7 @@ class FontsCheck(BaseCheck):
                 "(возможна ошибка единиц измерения)."
             )
         if not height_issues:
-            details.append("Высоты текста совпадают с рядом 1,8; 2,5; 3,5; 5; 7; 10; 14; 20 мм.")
+            details.append("Высоты текста совпадают с рядом ГОСТ 2.304-81: 1,8; 2,5; 3,5; 5; 7; 10; 14; 20; 28; 40 мм.")
 
         details.append(
             "Исправление задаёт стиль GOST_A с именем шрифта «GOST type A». "
@@ -283,8 +282,7 @@ class FontsCheck(BaseCheck):
             if roundable:
                 details.append(
                     f"Округлено высот текста: {len(roundable)}. "
-                    f"Надписи на поле чертежа выше {DRAWING_TEXT_MAX_MM:.0f} мм приведены к {DRAWING_TEXT_MAX_MM:.0f} мм "
-                    "(10–20 мм ряда ГОСТ обычно оставляют для титульных надписей)."
+                    "Каждая высота приведена к ближайшему значению ряда ГОСТ 2.304-81, без искусственного потолка 7 мм."
                 )
 
         findings = len(bad_styles) + len(unknown_styles) + len(roundable)

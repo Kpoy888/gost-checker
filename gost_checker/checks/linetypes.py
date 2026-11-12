@@ -7,7 +7,41 @@ from ..constants import (
     PREFERRED_LINEWEIGHTS_MM,
     STANDARD_LAYERS,
 )
+from ..units import du_to_mm
 from .base import BaseCheck, CheckContext
+
+# ГОСТ 2.303-68: центровые штрихпунктирные заменяют сплошной тонкой, если размер фигуры меньше 12 мм.
+SMALL_CENTER_DIAMETER_MM = 12.0
+
+
+def _fix_small_center_marks(ctx: CheckContext) -> list[str]:
+    notes: list[str] = []
+    seen = set()
+    for layout in [ctx.doc.modelspace(), *list(ctx.doc.layouts)]:
+        if id(layout) in seen:
+            continue
+        seen.add(id(layout))
+        try:
+            circles = list(layout.query("CIRCLE"))
+        except Exception:
+            continue
+        for entity in circles:
+            try:
+                diameter = du_to_mm(float(entity.dxf.radius) * 2.0, ctx.to_mm)
+            except Exception:
+                continue
+            if diameter <= 0 or diameter >= SMALL_CENTER_DIAMETER_MM - 0.05:
+                continue
+            linetype = _entity_linetype(entity, ctx.doc)
+            if linetype not in AXIS_LINETYPES and "CENTER" not in linetype and "DASHDOT" not in linetype:
+                continue
+            notes.append(f"окружность ⌀{diameter:.1f} мм, тип «{linetype}»")
+            if ctx.fix:
+                try:
+                    entity.dxf.linetype = "Continuous"
+                except Exception:
+                    continue
+    return notes
 
 
 def nearest_lineweight_mm(value_mm: float) -> float:
@@ -218,7 +252,19 @@ class LineTypesCheck(BaseCheck):
                 "Чтобы перенести их на слои СПДС по типу линии/толщине/тексту, запустите с --assign-layers и --fix."
             )
 
-        findings = len(unknown_lt) + len(odd_lw)
+        small_centers = _fix_small_center_marks(ctx)
+        if small_centers:
+            details.append(
+                "ГОСТ 2.303-68: штрихпунктирную центровую заменяют сплошной тонкой, "
+                f"если диаметр меньше {SMALL_CENTER_DIAMETER_MM:.0f} мм. Таких окружностей: {len(small_centers)}."
+            )
+            if ctx.fix:
+                details.append("Тип линии этих окружностей заменён на Continuous.")
+                auto = True
+            else:
+                details.append("Замена выполняется с --fix.")
+
+        findings = len(unknown_lt) + len(odd_lw) + len(small_centers)
         if findings == 0 and not created and not assigned:
             return self.result("ok", "Типы и толщины линий на слоях выглядят допустимо.", details)
         if assigned and findings == 0:
@@ -241,6 +287,14 @@ class LineTypesCheck(BaseCheck):
             if auto:
                 msg = "Толщины линий слоёв нормализованы к ближайшему значению ряда ГОСТ 2.303."
             return self.result("warning", msg, details, auto_fixed=auto, findings_count=findings)
+        if small_centers:
+            msg = (
+                "На окружностях диаметром меньше 12 мм центровые штрихпунктирные линии "
+                "по ГОСТ 2.303-68 заменяют сплошной тонкой."
+            )
+            if ctx.fix:
+                msg = "Мелкие центровые окружности переведены на сплошную тонкую линию (ГОСТ 2.303-68)."
+            return self.result("warning", msg, details, auto_fixed=bool(ctx.fix and small_centers), findings_count=findings)
         return self.result(
             "info",
             "Добавлены стандартные слои оформления СПДС (без переноса существующих объектов).",

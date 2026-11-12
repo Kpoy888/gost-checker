@@ -16,7 +16,7 @@ STAMP_FIELDS = [
     {"id": "обозначение", "label": "Обозначение", "required": True, "box": (65.0, 40.0, 135.0, 55.0), "tag": "OBOZN"},
     {"id": "объект", "label": "Объект", "required": False, "box": (135.0, 40.0, 185.0, 55.0), "tag": "OBEKT"},
     {"id": "здание", "label": "Здание", "required": False, "box": (65.0, 25.0, 135.0, 40.0), "tag": "ZDANIE"},
-    {"id": "наименование", "label": "Наименование", "required": True, "box": (65.0, 10.0, 135.0, 25.0), "tag": "NAIMEN"},
+    {"id": "наименование", "label": "Наименование", "required": True, "box": (65.0, 0.0, 135.0, 25.0), "tag": "NAIMEN"},
     {"id": "стадия", "label": "Стадия", "required": True, "box": (135.0, 20.0, 150.0, 35.0), "tag": "STADIYA"},
     {"id": "лист", "label": "Лист", "required": False, "box": (150.0, 20.0, 165.0, 35.0), "tag": "LIST"},
     {"id": "листов", "label": "Листов", "required": False, "box": (165.0, 20.0, 185.0, 35.0), "tag": "LISTOV"},
