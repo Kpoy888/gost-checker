@@ -7,7 +7,15 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from gost_checker.web import JOBS, MAX_JOBS, cleanup_jobs, create_app, safe_download_name, safe_upload_name
+from gost_checker.web import (
+    JOBS,
+    MAX_JOBS,
+    active_job_count,
+    cleanup_jobs,
+    create_app,
+    safe_download_name,
+    safe_upload_name,
+)
 
 
 def test_safe_names_reject_traversal():
@@ -127,6 +135,73 @@ def test_web_temp_cleanup(monkeypatch):
     assert web.JOBS == {}
     assert MAX_JOBS >= 1
 
+
+
+def test_cleanup_keeps_active_job(monkeypatch):
+    import gost_checker.web as web
+
+    monkeypatch.setattr(web, "MAX_JOBS", 2)
+    monkeypatch.setattr(web, "JOB_TTL_SEC", 10_000)
+    web.JOBS.clear()
+    web._ACTIVE_JOBS.clear()
+    folders = []
+    try:
+        for name in ("active", "old", "new"):
+            folder = Path(tempfile.mkdtemp(prefix=f"gost_active_{name}_"))
+            folders.append(folder)
+            web.JOBS[name] = (folder, time.time())
+            time.sleep(0.02)
+        web._ACTIVE_JOBS.add("active")
+        # active старше остальных и всё равно должен пережить очистку
+        web.JOBS["active"] = (folders[0], time.time() - 50)
+        cleanup_jobs()
+        assert "active" in web.JOBS
+        assert folders[0].exists()
+        assert active_job_count() == 1
+    finally:
+        import shutil
+
+        web._ACTIVE_JOBS.clear()
+        for _job_id, (folder, _ts) in list(web.JOBS.items()):
+            shutil.rmtree(folder, ignore_errors=True)
+        web.JOBS.clear()
+
+
+def test_web_rejects_when_all_slots_are_busy(monkeypatch):
+    import gost_checker.web as web
+
+    monkeypatch.setattr(web, "MAX_JOBS", 1)
+    web.JOBS.clear()
+    web._ACTIVE_JOBS.clear()
+    folder = Path(tempfile.mkdtemp(prefix="gost_busy_"))
+    try:
+        web.JOBS["busy"] = (folder, time.time())
+        web._ACTIVE_JOBS.add("busy")
+        client = TestClient(create_app())
+        response = client.post(
+            "/api/check",
+            files={"file": ("a.dxf", b"0\nEOF\n", "application/dxf")},
+            data={"fix": "false"},
+        )
+        assert response.status_code == 429
+        assert folder.exists()
+        assert "busy" in web.JOBS
+    finally:
+        web._ACTIVE_JOBS.clear()
+        web.JOBS.clear()
+        import shutil
+
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_index_file_input_is_visible_to_validation():
+    client = TestClient(create_app())
+    body = client.get("/").text
+    tag = body.split('id="file"', 1)[1].split(">", 1)[0]
+    assert "required" not in tag
+    assert "detailText" in body
+    assert "res.statusText" in body
+    assert "Number.isFinite" in body
 
 
 def test_index_and_health():

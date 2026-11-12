@@ -22,8 +22,6 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
-mkdir -p "$ROOT/logs"
 
 LOG="$ROOT/logs/tunnel_alt.log"
 URL_FILE="$ROOT/PUBLIC_URL.txt"
@@ -32,31 +30,41 @@ CHILD_PID="$ROOT/logs/tunnel_alt.pid"
 PORT="${PORT:-7860}"
 PROVIDER="${TUNNEL_ALT:-auto}"
 
-echo $$ > "$SUPER_PID"
-
+LOG_OFFSET=0
 CHILD=""
 cleanup() {
+  local why="${1:-EXIT}"
   if [[ -n "${CHILD}" ]] && kill -0 "${CHILD}" 2>/dev/null; then
     kill "${CHILD}" 2>/dev/null || true
     wait "${CHILD}" 2>/dev/null || true
   fi
+  if [[ "$why" == "TERM" || "$why" == "INT" ]]; then
+    trap - EXIT INT TERM
+    exit 0
+  fi
 }
-trap cleanup EXIT INT TERM
 
 ts() { date "+%Y-%m-%d %H:%M:%S %Z"; }
 
 extract_url_from_log() {
   local file="$1"
+  local mark="${2:-0}"
   [[ -f "$file" ]] || return 1
-  grep -oE 'https://[A-Za-z0-9.-]+\.(loca\.lt|localtunnel\.me|trycloudflare\.com|pinggy\.io|pinggy\.link|a\.free\.pinggy\.link|serveo\.net|localhost\.run|lhr\.life|tunnelmole\.(net|com)|tmole\.cloud)' "$file" 2>/dev/null | tail -n 1
+  [[ "$mark" =~ ^[0-9]+$ ]] || mark=0
+  # Только хвост после старта текущего поставщика, иначе берётся URL предыдущей попытки.
+  tail -c +"$((mark + 1))" "$file" 2>/dev/null \
+    | grep -oE 'https://[A-Za-z0-9.-]+\.(loca\.lt|localtunnel\.me|trycloudflare\.com|pinggy\.io|pinggy\.link|a\.free\.pinggy\.link|serveo\.net|localhost\.run|lhr\.life|tunnelmole\.(net|com)|tmole\.cloud)' \
+    | tail -n 1
 }
 
 extract_bore_url() {
   local file="$1"
+  local mark="${2:-0}"
   [[ -f "$file" ]] || return 1
+  [[ "$mark" =~ ^[0-9]+$ ]] || mark=0
   # listening at bore.pub:XXXXX
   local hit
-  hit="$(grep -oE 'bore\.pub:[0-9]+' "$file" 2>/dev/null | tail -n 1 || true)"
+  hit="$(tail -c +"$((mark + 1))" "$file" 2>/dev/null | grep -oE 'bore\.pub:[0-9]+' | tail -n 1 || true)"
   if [[ -n "$hit" ]]; then
     printf 'http://%s\n' "$hit"
   fi
@@ -83,6 +91,14 @@ public_health_ok() {
   return 1
 }
 
+bore_asset_for_arch() {
+  case "$1" in
+    x86_64|amd64) printf '%s\n' "bore-v0.5.2-x86_64-unknown-linux-musl.tar.gz" ;;
+    aarch64|arm64) printf '%s\n' "bore-v0.5.2-aarch64-unknown-linux-musl.tar.gz" ;;
+    *) return 1 ;;
+  esac
+}
+
 ensure_bore() {
   if command -v bore >/dev/null 2>&1; then
     command -v bore
@@ -94,7 +110,12 @@ ensure_bore() {
   fi
   mkdir -p "${HOME}/.local/bin"
   local dest="${HOME}/.local/bin/bore"
-  local url="https://github.com/ekzhang/bore/releases/download/v0.5.2/bore-v0.5.2-x86_64-unknown-linux-musl.tar.gz"
+  local asset url
+  asset="$(bore_asset_for_arch "$(uname -m)")" || {
+    echo "[$(ts)] нет сборки bore для $(uname -m)" >> "$LOG"
+    return 1
+  }
+  url="https://github.com/ekzhang/bore/releases/download/v0.5.2/${asset}"
   echo "[$(ts)] скачиваю bore → ${dest}" >> "$LOG"
   local tmp
   tmp="$(mktemp -d)"
@@ -164,6 +185,12 @@ start_bore() {
 
 start_provider() {
   local name="$1"
+  if [[ -f "$LOG" ]]; then
+    LOG_OFFSET="$(wc -c < "$LOG" | tr -d '[:space:]')"
+  else
+    LOG_OFFSET=0
+  fi
+  [[ "$LOG_OFFSET" =~ ^[0-9]+$ ]] || LOG_OFFSET=0
   echo "[$(ts)] запуск запасного туннеля: ${name} (порт ${PORT})" >> "$LOG"
   case "$name" in
     localtunnel) start_localtunnel ;;
@@ -181,12 +208,12 @@ start_provider() {
 }
 
 wait_for_url() {
-  local name="$1" seconds="${2:-40}" i url
-  for i in $(seq 1 "$seconds"); do
+  local name="$1" seconds="${2:-40}" _i url
+  for _i in $(seq 1 "$seconds"); do
     if [[ "$name" == "bore" ]]; then
-      url="$(extract_bore_url "$LOG" || true)"
+      url="$(extract_bore_url "$LOG" "${LOG_OFFSET:-0}" || true)"
     else
-      url="$(extract_url_from_log "$LOG" || true)"
+      url="$(extract_url_from_log "$LOG" "${LOG_OFFSET:-0}" || true)"
     fi
     if [[ -n "$url" ]]; then
       printf '%s\n' "$url"
@@ -219,8 +246,8 @@ run_one() {
   fi
   write_url "$url"
   echo "[$(ts)] ${name}: проверяю ${url}/health" >> "$LOG"
-  local i
-  for i in 1 2 3 4 5 6; do
+  local _i
+  for _i in 1 2 3 4 5 6; do
     if public_health_ok "$url"; then
       echo "[$(ts)] ${name}: /health отвечает, оставляю этот туннель" >> "$LOG"
       wait "${CHILD}"
@@ -238,7 +265,14 @@ run_one() {
 
 ALL_PROVIDERS=(localtunnel pinggy serveo localhost_run tunnelmole bore)
 
-while true; do
+main_loop() {
+  cd "$ROOT" || exit 1
+  mkdir -p "$ROOT/logs"
+  echo $$ > "$SUPER_PID"
+  trap 'cleanup EXIT' EXIT
+  trap 'cleanup INT' INT
+  trap 'cleanup TERM' TERM
+  while true; do
   if [[ "$PROVIDER" == "auto" ]]; then
     local_ok=0
     for name in "${ALL_PROVIDERS[@]}"; do
@@ -259,4 +293,9 @@ while true; do
   fi
   echo "[$(ts)] перезапуск запасного туннеля. Новый запуск выдаст ДРУГОЙ адрес." >> "$LOG"
   sleep 3
-done
+  done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main_loop
+fi

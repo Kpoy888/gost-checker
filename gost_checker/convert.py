@@ -66,6 +66,20 @@ def _libredwg_env(binary: str) -> dict:
     return env
 
 
+def run_converter(cmd: list[str], timeout: int, env: Optional[dict] = None) -> subprocess.CompletedProcess:
+    """Запуск внешней утилиты. stderr в cp1251 не должен ронять уже успешную конвертацию."""
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+        env=env,
+    )
+
+
 def _prepare_dxf_for_libredwg(src: Path, out_dir: Path) -> Path:
     """LibreDWG dxf2dwg устойчиво пишет только r12–r2000."""
     try:
@@ -179,12 +193,9 @@ def dwg_to_dxf(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
     dwg2dxf = find_libredwg_dwg2dxf()
     if dwg2dxf:
         try:
-            proc = subprocess.run(
+            proc = run_converter(
                 [dwg2dxf, "-y", "-o", str(dest), str(src)],
-                capture_output=True,
-                text=True,
                 timeout=120,
-                check=False,
                 env=_libredwg_env(dwg2dxf),
             )
             produced = dest if dest.exists() and dest.stat().st_size > 0 else None
@@ -200,12 +211,9 @@ def dwg_to_dxf(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
                 count = _dxf_entity_count(produced)
                 if count == 0 or count == -1:
                     minimal = out_dir / (src.stem + ".converted.min.dxf")
-                    subprocess.run(
+                    run_converter(
                         [dwg2dxf, "-y", "-m", "-o", str(minimal), str(src)],
-                        capture_output=True,
-                        text=True,
                         timeout=120,
-                        check=False,
                         env=_libredwg_env(dwg2dxf),
                     )
                     if minimal.exists() and _dxf_entity_count(minimal) > 0:
@@ -213,6 +221,7 @@ def dwg_to_dxf(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
                             f"DWG преобразован в DXF утилитой LibreDWG ({dwg2dxf}, режим --minimal): "
                             "полный DXF был структурно повреждён, сохранены сущности модели без таблиц слоёв."
                         )
+                    minimal.unlink(missing_ok=True)
                     if count > 0:
                         return produced, f"DWG преобразован в DXF утилитой LibreDWG ({dwg2dxf}).{extra}"
                     if count == 0:
@@ -230,18 +239,15 @@ def dwg_to_dxf(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
 
     oda = find_oda()
     if oda:
+        tmp_in = out_dir / "_oda_in"
+        tmp_out = out_dir / "_oda_out"
         try:
-            tmp_in = out_dir / "_oda_in"
-            tmp_out = out_dir / "_oda_out"
             tmp_in.mkdir(exist_ok=True)
             tmp_out.mkdir(exist_ok=True)
             shutil.copy2(src, tmp_in / src.name)
-            proc = subprocess.run(
+            proc = run_converter(
                 [oda, str(tmp_in), str(tmp_out), "DWG", "ACAD2018", "DXF", "0", "0"],
-                capture_output=True,
-                text=True,
                 timeout=180,
-                check=False,
             )
             produced = list(tmp_out.glob("*.dxf")) + list(tmp_out.glob("*.DXF"))
             if produced:
@@ -253,6 +259,9 @@ def dwg_to_dxf(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
             )
         except Exception as exc:
             return None, f"Ошибка запуска ODA File Converter: {exc}"
+        finally:
+            shutil.rmtree(tmp_in, ignore_errors=True)
+            shutil.rmtree(tmp_out, ignore_errors=True)
 
     return None, (
         "Конвертер DWG не найден. Запустите scripts/install_dwg.sh "
@@ -272,20 +281,12 @@ def dxf_to_dwg(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
     if dxf2dwg:
         work = _prepare_dxf_for_libredwg(src, out_dir)
         try:
-            proc = subprocess.run(
+            proc = run_converter(
                 [dxf2dwg, "-y", "--as", "r2000", "-o", str(dest), str(work)],
-                capture_output=True,
-                text=True,
                 timeout=120,
-                check=False,
                 env=_libredwg_env(dxf2dwg),
             )
             if dest.exists() and dest.stat().st_size > 0:
-                if work != src:
-                    try:
-                        work.unlink()
-                    except OSError:
-                        pass
                 extra = ""
                 log = (proc.stderr or proc.stdout or "")
                 if "ERROR" in log:
@@ -299,21 +300,24 @@ def dxf_to_dwg(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
             )
         except Exception as exc:
             return None, f"Ошибка запуска LibreDWG dxf2dwg: {exc}"
+        finally:
+            if work != src:
+                try:
+                    work.unlink()
+                except OSError:
+                    pass
 
     oda = find_oda()
     if oda:
+        tmp_in = out_dir / "_oda_dxf_in"
+        tmp_out = out_dir / "_oda_dwg_out"
         try:
-            tmp_in = out_dir / "_oda_dxf_in"
-            tmp_out = out_dir / "_oda_dwg_out"
             tmp_in.mkdir(exist_ok=True)
             tmp_out.mkdir(exist_ok=True)
             shutil.copy2(src, tmp_in / src.name)
-            proc = subprocess.run(
+            proc = run_converter(
                 [oda, str(tmp_in), str(tmp_out), "DXF", "ACAD2018", "DWG", "0", "0"],
-                capture_output=True,
-                text=True,
                 timeout=180,
-                check=False,
             )
             produced = list(tmp_out.glob("*.dwg")) + list(tmp_out.glob("*.DWG"))
             if produced:
@@ -322,6 +326,9 @@ def dxf_to_dwg(src: Path, out_dir: Path) -> tuple[Optional[Path], str]:
             return None, f"ODA File Converter не создал DWG (код {proc.returncode})."
         except Exception as exc:
             return None, f"Ошибка запуска ODA File Converter: {exc}"
+        finally:
+            shutil.rmtree(tmp_in, ignore_errors=True)
+            shutil.rmtree(tmp_out, ignore_errors=True)
 
     return None, (
         "Запись DWG недоступна: нет LibreDWG `dxf2dwg` (см. scripts/install_dwg.sh) и нет ODA File Converter. "

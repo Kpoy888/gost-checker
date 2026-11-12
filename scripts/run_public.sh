@@ -20,8 +20,6 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
-mkdir -p "$ROOT/logs"
 
 PORT="${PORT:-7860}"
 HOST="${HOST:-0.0.0.0}"
@@ -35,8 +33,8 @@ stop_pidfile() {
   pid="$(tr -d '[:space:]' < "$file" || true)"
   if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
     kill "${pid}" 2>/dev/null || true
-    local i
-    for i in 1 2 3 4 5; do
+    local _i
+    for _i in 1 2 3 4 5; do
       kill -0 "${pid}" 2>/dev/null || break
       sleep 0.3
     done
@@ -93,12 +91,20 @@ pick_cloudflared_dest() {
     printf '%s\n' "$CLOUDFLARED_BIN"
     return
   fi
+  if [[ -x "$ROOT/bin/cloudflared" ]]; then
+    printf '%s\n' "$ROOT/bin/cloudflared"
+    return
+  fi
+  if [[ -x "${HOME}/.local/bin/cloudflared" ]]; then
+    printf '%s\n' "${HOME}/.local/bin/cloudflared"
+    return
+  fi
   if [[ -x /workspace/bin/cloudflared ]]; then
     printf '%s\n' /workspace/bin/cloudflared
     return
   fi
-  if [[ -d /workspace/bin && -w /workspace/bin ]]; then
-    printf '%s\n' /workspace/bin/cloudflared
+  if command -v cloudflared >/dev/null 2>&1; then
+    command -v cloudflared
     return
   fi
   mkdir -p "${HOME}/.local/bin"
@@ -141,14 +147,19 @@ public_health_ok() {
 }
 
 wait_url_file() {
-  local seconds="${1:-90}" i url
+  # $2 — unix-время: файл старше него считается адресом прошлого запуска.
+  local seconds="${1:-90}" since="${2:-0}" _i url mtime
   url=""
-  for i in $(seq 1 "$seconds"); do
+  [[ "$since" =~ ^[0-9]+$ ]] || since=0
+  for _i in $(seq 1 "$seconds"); do
     if [[ -f "$ROOT/PUBLIC_URL.txt" ]]; then
-      url="$(tr -d '[:space:]' < "$ROOT/PUBLIC_URL.txt" || true)"
-      if [[ "$url" == http://* || "$url" == https://* ]]; then
-        printf '%s\n' "$url"
-        return 0
+      mtime="$(stat -c %Y "$ROOT/PUBLIC_URL.txt" 2>/dev/null || echo 0)"
+      if [[ "$since" -eq 0 || "$mtime" -ge "$since" ]]; then
+        url="$(tr -d '[:space:]' < "$ROOT/PUBLIC_URL.txt" || true)"
+        if [[ "$url" == http://* || "$url" == https://* ]]; then
+          printf '%s\n' "$url"
+          return 0
+        fi
       fi
     fi
     sleep 1
@@ -165,8 +176,8 @@ start_alt_tunnel() {
 }
 
 wait_local_health() {
-  local i
-  for i in $(seq 1 60); do
+  local _i
+  for _i in $(seq 1 60); do
     if curl -sf --max-time 2 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
       return 0
     fi
@@ -177,6 +188,8 @@ wait_local_health() {
 }
 
 cmd_start() {
+  cd "$ROOT" || exit 1
+  mkdir -p "$ROOT/logs"
   chmod +x "$ROOT/scripts/serve_forever.sh" \
            "$ROOT/scripts/tunnel_forever.sh" \
            "$ROOT/scripts/tunnel_alt_forever.sh" 2>/dev/null || true
@@ -207,22 +220,27 @@ cmd_start() {
   local prefer="${TUNNEL_PROVIDER:-auto}"
   local url=""
   local used="none"
+  local started
+  started="$(date +%s)"
 
   if [[ "$prefer" != "alt" ]]; then
     if [[ -f "$ROOT/logs/tunnel.supervisor.pid" ]] && kill -0 "$(cat "$ROOT/logs/tunnel.supervisor.pid")" 2>/dev/null; then
       echo "Супервизор Cloudflare уже запущен (PID $(cat "$ROOT/logs/tunnel.supervisor.pid"))."
+      url="$(wait_url_file 15 0 || true)"
     else
       echo "Запускаю Cloudflare Quick Tunnel (аккаунт не нужен)..."
+      rm -f "$ROOT/PUBLIC_URL.txt"
+      started="$(date +%s)"
       nohup env CLOUDFLARED_BIN="$CLOUDFLARED_BIN" TUNNEL_ORIGIN="http://localhost:${PORT}" \
         bash "$ROOT/scripts/tunnel_forever.sh" >> "$ROOT/logs/tunnel.supervisor.out" 2>&1 &
       disown || true
+      echo "Жду адреса trycloudflare.com..."
+      url="$(wait_url_file 50 "$started" || true)"
     fi
-    echo "Жду адреса trycloudflare.com..."
-    url="$(wait_url_file 50 || true)"
     if [[ -n "$url" ]]; then
       echo "Проверяю ${url}/health снаружи..."
-      local i ok=0
-      for i in 1 2 3 4 5 6 7 8; do
+      local _i ok=0
+      for _i in 1 2 3 4 5 6 7 8; do
         if public_health_ok "$url"; then ok=1; break; fi
         sleep 3
       done
@@ -245,11 +263,15 @@ cmd_start() {
   if [[ "$used" == "none" ]]; then
     if [[ -f "$ROOT/logs/tunnel_alt.supervisor.pid" ]] && kill -0 "$(cat "$ROOT/logs/tunnel_alt.supervisor.pid")" 2>/dev/null; then
       echo "Запасной супервизор уже запущен (PID $(cat "$ROOT/logs/tunnel_alt.supervisor.pid"))."
+      url="$(wait_url_file 20 0 || true)"
     else
+      rm -f "$ROOT/PUBLIC_URL.txt"
+      local alt_since
+      alt_since="$(date +%s)"
       start_alt_tunnel
+      echo "Жду адрес запасного туннеля..."
+      url="$(wait_url_file 80 "$alt_since" || true)"
     fi
-    echo "Жду адрес запасного туннеля..."
-    url="$(wait_url_file 80 || true)"
     used="alt"
   fi
 
@@ -270,12 +292,16 @@ cmd_start() {
   echo "Остановка:    bash scripts/run_public.sh stop"
 }
 
-case "${1:-start}" in
-  start) cmd_start ;;
-  stop) cmd_stop ;;
-  status) cmd_status ;;
-  *)
-    echo "Использование: $0 {start|stop|status}" >&2
-    exit 2
-    ;;
-esac
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  cd "$ROOT" || exit 1
+  mkdir -p "$ROOT/logs"
+  case "${1:-start}" in
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    status) cmd_status ;;
+    *)
+      echo "Использование: $0 {start|stop|status}" >&2
+      exit 2
+      ;;
+  esac
+fi

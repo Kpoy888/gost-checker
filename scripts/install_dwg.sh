@@ -7,6 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT" || exit 1
 PREFIX="${LIBREDWG_PREFIX:-$ROOT/vendor/libredwg}"
 VERSION="${LIBREDWG_VERSION:-0.13.3}"
 TARBALL="libredwg-${VERSION}.tar.gz"
@@ -72,6 +73,7 @@ fi
 
 WORKDIR="${TMPDIR:-/tmp}/libredwg-build-$$"
 mkdir -p "$WORKDIR"
+# shellcheck disable=SC2317
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
@@ -107,9 +109,11 @@ if [[ -z "$SRC_DIR" ]]; then
   echo "В архиве не найден каталог исходников." >&2
   exit 1
 fi
-cd "$SRC_DIR"
+cd "$SRC_DIR" || exit 1
 echo "Собираю LibreDWG ${VERSION} в $PREFIX ..."
 # Относительный RPATH, чтобы каталог vendor/ можно было переносить вместе с проектом.
+# $ORIGIN должен дойти до линкера нераскрытым — это каталог бинарника, не переменная shell.
+# shellcheck disable=SC2016
 export LDFLAGS='-Wl,-rpath,$ORIGIN/../lib'
 ./configure --prefix="$PREFIX" --disable-bindings --disable-docs
 make -j"$(nproc 2>/dev/null || echo 2)"

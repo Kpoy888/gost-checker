@@ -12,6 +12,7 @@ from ..constants import (
     SPDS_DIMSTYLE,
 )
 from ..titleblock import ensure_gost_style
+from ..units import du_to_mm, mm_to_du
 from .base import BaseCheck, CheckContext
 
 
@@ -64,7 +65,7 @@ def _arrow_ok(ds, header) -> tuple[bool, str]:
     return False, f"ограничители «{joined or 'по умолчанию'}» не распознаны как засечки"
 
 
-def _apply_spds_dimstyle(doc, name: str = SPDS_DIMSTYLE):
+def _apply_spds_dimstyle(doc, name: str = SPDS_DIMSTYLE, to_mm: float = 1.0):
     ensure_gost_style(doc)
     if name not in {s.dxf.name for s in doc.dimstyles}:
         try:
@@ -85,11 +86,12 @@ def _apply_spds_dimstyle(doc, name: str = SPDS_DIMSTYLE):
         ds.dxf.dimtsz = 0
     except Exception:
         pass
-    ds.dxf.dimasz = 2.5
-    ds.dxf.dimtxt = 3.5
-    ds.dxf.dimexe = 2.0
+    # DIMTXT/DIMASZ/DIMEXE хранятся в единицах чертежа, а не всегда в миллиметрах.
+    ds.dxf.dimasz = mm_to_du(2.5, to_mm)
+    ds.dxf.dimtxt = mm_to_du(3.5, to_mm)
+    ds.dxf.dimexe = mm_to_du(2.0, to_mm)
     ds.dxf.dimexo = 0
-    ds.dxf.dimgap = 1.0
+    ds.dxf.dimgap = mm_to_du(1.0, to_mm)
     ds.dxf.dimtad = 1
     ds.dxf.dimtih = 0
     ds.dxf.dimtoh = 0
@@ -114,7 +116,11 @@ class DimensionsCheck(BaseCheck):
 
         used = set()
         dim_count = 0
+        seen_layouts = set()
         for layout in [ctx.doc.modelspace(), *list(ctx.doc.layouts)]:
+            if id(layout) in seen_layouts:
+                continue
+            seen_layouts.add(id(layout))
             for entity in layout.query("DIMENSION"):
                 dim_count += 1
                 try:
@@ -131,10 +137,10 @@ class DimensionsCheck(BaseCheck):
             if name not in used:
                 continue
             arrows_ok, arrow_desc = _arrow_ok(ds, header)
-            dimtxt = float(_get(ds, "dimtxt", header, 2.5) or 2.5)
-            dimasz = float(_get(ds, "dimasz", header, 2.5) or 2.5)
-            dimexe = float(_get(ds, "dimexe", header, 1.25) or 1.25)
-            dimexo = float(_get(ds, "dimexo", header, 0.625) or 0.625)
+            dimtxt = du_to_mm(float(_get(ds, "dimtxt", header, 2.5) or 2.5), ctx.to_mm)
+            dimasz = du_to_mm(float(_get(ds, "dimasz", header, 2.5) or 2.5), ctx.to_mm)
+            dimexe = du_to_mm(float(_get(ds, "dimexe", header, 1.25) or 1.25), ctx.to_mm)
+            dimexo = du_to_mm(float(_get(ds, "dimexo", header, 0.625) or 0.625), ctx.to_mm)
             style_issues = []
             if not arrows_ok:
                 style_issues.append(arrow_desc)
@@ -164,7 +170,7 @@ class DimensionsCheck(BaseCheck):
 
         auto = False
         if ctx.fix and issues:
-            _apply_spds_dimstyle(ctx.doc, SPDS_DIMSTYLE)
+            _apply_spds_dimstyle(ctx.doc, SPDS_DIMSTYLE, ctx.to_mm)
             details.append(
                 f"Создан или обновлён размерный стиль «{SPDS_DIMSTYLE}»: засечки OBLIQUE 2,5 мм, "
                 "текст 3,5 мм, DIMEXE=2, DIMEXO=0, текст над размерной линией."
@@ -175,9 +181,9 @@ class DimensionsCheck(BaseCheck):
                     ds.set_arrows(blk=ARROWS.oblique)
                 except Exception:
                     pass
-                ds.dxf.dimasz = 2.5
-                ds.dxf.dimtxt = 3.5
-                ds.dxf.dimexe = 2.0
+                ds.dxf.dimasz = mm_to_du(2.5, ctx.to_mm)
+                ds.dxf.dimtxt = mm_to_du(3.5, ctx.to_mm)
+                ds.dxf.dimexe = mm_to_du(2.0, ctx.to_mm)
                 ds.dxf.dimexo = 0
                 ds.dxf.dimtad = 1
                 ds.dxf.dimtih = 0

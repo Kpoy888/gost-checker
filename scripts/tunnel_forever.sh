@@ -6,7 +6,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 mkdir -p "$ROOT/logs"
 
 LOG="$ROOT/logs/tunnel.log"
@@ -17,14 +17,16 @@ ORIGIN="${TUNNEL_ORIGIN:-http://localhost:7860}"
 
 if [[ -n "${CLOUDFLARED_BIN:-}" ]]; then
   BIN="$CLOUDFLARED_BIN"
-elif [[ -x /workspace/bin/cloudflared ]]; then
-  BIN=/workspace/bin/cloudflared
+elif [[ -x "$ROOT/bin/cloudflared" ]]; then
+  BIN="$ROOT/bin/cloudflared"
 elif [[ -x "${HOME}/.local/bin/cloudflared" ]]; then
   BIN="${HOME}/.local/bin/cloudflared"
+elif [[ -x /workspace/bin/cloudflared ]]; then
+  BIN=/workspace/bin/cloudflared
 elif command -v cloudflared >/dev/null 2>&1; then
   BIN="$(command -v cloudflared)"
 else
-  echo "cloudflared не найден. Скачайте linux-amd64 с GitHub Releases в /workspace/bin/cloudflared или ~/.local/bin/cloudflared." >&2
+  echo "cloudflared не найден. Скачайте бинарник с GitHub Releases в ~/.local/bin/cloudflared или задайте CLOUDFLARED_BIN." >&2
   exit 1
 fi
 
@@ -34,6 +36,7 @@ CHILD=""
 WATCH=""
 
 cleanup() {
+  local why="${1:-EXIT}"
   if [[ -n "${WATCH}" ]] && kill -0 "${WATCH}" 2>/dev/null; then
     kill "${WATCH}" 2>/dev/null || true
   fi
@@ -41,8 +44,14 @@ cleanup() {
     kill "${CHILD}" 2>/dev/null || true
     wait "${CHILD}" 2>/dev/null || true
   fi
+  if [[ "$why" == "TERM" || "$why" == "INT" ]]; then
+    trap - EXIT INT TERM
+    exit 0
+  fi
 }
-trap cleanup EXIT INT TERM
+trap 'cleanup EXIT' EXIT
+trap 'cleanup INT' INT
+trap 'cleanup TERM' TERM
 
 ts() { date "+%Y-%m-%d %H:%M:%S %Z"; }
 
@@ -70,11 +79,10 @@ while true; do
   "$BIN" tunnel --url "$ORIGIN" --no-autoupdate >> "$LOG" 2>&1 &
   CHILD=$!
   echo "${CHILD}" > "$CHILD_PID"
-  set +e
-  wait "${CHILD}"
-  code=$?
-  set -e
-  echo "[$(ts)] cloudflared (pid ${CHILD}) завершился с кодом ${code}; перезапуск через 3 с. Новый запуск выдаст ДРУГОЙ trycloudflare-адрес." >> "$LOG"
+  wait "${CHILD}" || code=$?
+  code=${code:-0}
+  echo "[$(ts)] cloudflared (pid ${CHILD}) завершился с кодом ${code}; перезапуск через ${RESTART_DELAY:-3} с. Новый запуск выдаст ДРУГОЙ trycloudflare-адрес." >> "$LOG"
   CHILD=""
-  sleep 3
+  code=0
+  sleep "${RESTART_DELAY:-3}"
 done

@@ -156,7 +156,7 @@
 
     <form id="form" class="card">
       <h2>Загрузить чертёж</h2>
-      <input id="file" name="file" type="file" required hidden
+      <input id="file" name="file" type="file" hidden
              accept=".dxf,.dwg,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
       <input type="hidden" name="preview" value="true">
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Выбрать файл чертежа">
@@ -287,10 +287,17 @@ drop.addEventListener("drop", (ev) => {
 fileInput.addEventListener("change", () => showFile(fileInput.files[0]));
 
 function detailText(payload) {
-  if (!payload) return "неизвестная ошибка";
-  if (typeof payload.detail === "string") return payload.detail;
-  if (Array.isArray(payload.detail)) return payload.detail.map((x) => x.msg || x).join("; ");
-  return payload.message || JSON.stringify(payload);
+  if (!payload || typeof payload !== "object") return "";
+  if (typeof payload.detail === "string" && payload.detail.trim()) return payload.detail;
+  if (Array.isArray(payload.detail)) {
+    const parts = payload.detail.map((item) => {
+      if (item && typeof item === "object") return item.msg || item.message || "";
+      return item || "";
+    }).filter(Boolean);
+    if (parts.length) return parts.join("; ");
+  }
+  if (payload.message) return String(payload.message);
+  return "";
 }
 
 form.addEventListener("submit", async (ev) => {
@@ -311,7 +318,7 @@ form.addEventListener("submit", async (ev) => {
     const res = await fetch("/api/check", { method: "POST", body: data });
     let payload = {};
     try { payload = await res.json(); } catch (e) { payload = {}; }
-    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText || ("HTTP " + res.status));
     steps.innerHTML = "1. Загрузка → 2. Проверка правил → <b>3. Отчёт готов</b>";
     renderResult(payload);
     status.textContent = "Готово.";
@@ -360,7 +367,7 @@ function renderResult(payload) {
   margins.forEach((row) => {
     const tr = document.createElement("tr");
     tr.className = row.ok ? "ok" : "fail";
-    tr.innerHTML = `<td>${escapeHtml(row.side)}</td><td>${Number(row.value).toFixed(2)}</td><td>${Number(row.required).toFixed(2)}</td><td>${row.ok ? "да" : "нет"}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(row.side)}</td><td>${formatMm(row.value)}</td><td>${formatMm(row.required)}</td><td>${row.ok ? "да" : "нет"}</td>`;
     mb.appendChild(tr);
   });
 
@@ -375,7 +382,17 @@ function renderResult(payload) {
     : "";
   kinds.forEach((row) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td><span class="sw" style="background:${row.color || "#444"}"></span>${escapeHtml(row.title || row.kind)}</td><td>${row.count}</td><td>${row.length_mm}</td>`;
+    const swatch = document.createElement("span");
+    swatch.className = "sw";
+    swatch.style.background = safeColor(row.color);
+    const title = document.createElement("td");
+    title.appendChild(swatch);
+    title.appendChild(document.createTextNode(row.title || row.kind || ""));
+    const count = document.createElement("td");
+    count.textContent = row.count ?? "";
+    const length = document.createElement("td");
+    length.textContent = row.length_mm ?? "";
+    tr.append(title, count, length);
     lb.appendChild(tr);
   });
 
@@ -388,7 +405,12 @@ function renderResult(payload) {
   ].forEach(([url, caption]) => {
     if (!url) return;
     const fig = document.createElement("figure");
-    fig.innerHTML = `<figcaption>${caption}</figcaption><img alt="${caption}" src="${url}">`;
+    const cap = document.createElement("figcaption");
+    cap.textContent = caption;
+    const img = document.createElement("img");
+    img.alt = caption;
+    img.src = url;
+    fig.append(cap, img);
     previews.appendChild(fig);
   });
 
@@ -406,7 +428,15 @@ function renderResult(payload) {
 }
 
 function pill(label, value) {
-  return `<span class="pill">${label}: <b>${value}</b></span>`;
+  return `<span class="pill">${label}: <b>${escapeHtml(value)}</b></span>`;
+}
+function formatMm(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : "—";
+}
+function safeColor(value) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(String(value || "")) ? String(value) : "#444";
 }
 function escapeHtml(value) {
   return String(value ?? "")

@@ -36,6 +36,9 @@ def default_title_meta() -> dict[str, str]:
     }
 
 
+MAX_TITLE_FIELD = 500
+
+
 def normalize_title_meta(raw: Optional[dict]) -> dict[str, str]:
     meta = default_title_meta()
     if not raw:
@@ -73,7 +76,7 @@ def normalize_title_meta(raw: Optional[dict]) -> dict[str, str]:
             "наименование изделий": "наименование",
         }.get(dest, dest)
         if dest in meta:
-            meta[dest] = str(value)
+            meta[dest] = str(value).replace("\x00", "")[:MAX_TITLE_FIELD]
     return meta
 
 

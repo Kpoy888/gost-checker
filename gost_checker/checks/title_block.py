@@ -178,7 +178,8 @@ class TitleBlockCheck(BaseCheck):
             else:
                 insert = title_block_insert_point(inner.xmin, inner.ymin, inner.xmax, ctx.to_mm)
                 space = inner.space
-                layout = ctx.doc.modelspace() if space.lower() == "model" else ctx.doc.layouts.get(space)
+                layout = layout_or_model(ctx.doc, space)
+                space = getattr(layout, "name", space) or space
             if "SPDS_STAMP" not in ctx.doc.layers:
                 ctx.doc.layers.add("SPDS_STAMP", linetype="Continuous", lineweight=50, color=7)
             insert_form3(ctx.doc, insert, ctx.title_meta, to_mm=ctx.to_mm, layout=layout)
@@ -210,9 +211,25 @@ class TitleBlockCheck(BaseCheck):
         )
 
 
+def layout_or_model(doc, space: str | None):
+    """Лист по имени. Незнакомое имя и KeyError не должны ронять всю проверку."""
+    name = space or "Model"
+    if str(name).lower() == "model":
+        return doc.modelspace()
+    try:
+        found = doc.layouts.get(name)
+    except Exception:
+        return doc.modelspace()
+    return found if found is not None else doc.modelspace()
+
+
 def _collect_text(doc) -> list[str]:
     texts: list[str] = []
+    seen = set()
     for layout in [doc.modelspace(), *list(doc.layouts)]:
+        if id(layout) in seen:
+            continue
+        seen.add(id(layout))
         try:
             entities = list(layout)
         except Exception:

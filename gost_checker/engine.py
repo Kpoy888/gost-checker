@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -14,7 +15,7 @@ from .models import CheckResult, ProcessResult
 from .raster import process_image, process_pdf
 from .render import render_dxf_to_png
 from .report import summarize, write_reports
-from .units import doc_to_mm
+from .units import doc_to_mm, resolve_insunits
 
 
 COMMON_LIMITS = [
@@ -122,6 +123,30 @@ def _open_dxf(path: Path):
             raise RuntimeError(f"Файл DXF повреждён или не читается: {exc}") from exc
 
 
+_LEGACY_DXF = {"AC1006", "AC1009", "AC1012", "AC1014"}
+
+
+def _fallback_out_dir(out_dir: Path) -> Path:
+    parent = out_dir.parent
+    candidate = parent / f"{out_dir.name}.gost-out"
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+        return candidate
+    except OSError:
+        return Path(tempfile.mkdtemp(prefix="gost_out_"))
+
+
+def _upgrade_legacy_dxf(doc, notes: list[str]) -> None:
+    """R12–R14 не умеют LWPOLYLINE: правка рамки и штампа иначе обрывает весь отчёт."""
+    version = str(getattr(doc, "dxfversion", "") or "")
+    if version in _LEGACY_DXF:
+        doc.dxfversion = "AC1015"
+        notes.append(
+            f"Исходная версия DXF {version} не поддерживает полилинии и атрибуты штампа. "
+            "Исправленный файл сохранён как AutoCAD 2000 (AC1015)."
+        )
+
+
 def process_file(
     input_path: Path | str,
     out_dir: Path | str,
@@ -131,8 +156,21 @@ def process_file(
     render: bool = False,
     assign_layers: bool = False,
 ) -> ProcessResult:
-    out_dir = Path(out_dir).expanduser().resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    raw_input = input_path
+    try:
+        out_dir = Path(out_dir).expanduser().resolve()
+    except Exception as exc:
+        alt = Path(tempfile.mkdtemp(prefix="gost_out_"))
+        return _error_result(Path(str(raw_input)), alt, f"Некорректный каталог результатов: {exc}")
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        alt = _fallback_out_dir(out_dir)
+        return _error_result(
+            Path(str(raw_input)),
+            alt,
+            f"Не удалось создать каталог результатов «{out_dir}»: {exc}",
+        )
     try:
         input_path = Path(input_path).expanduser().resolve()
     except Exception as exc:
@@ -189,6 +227,9 @@ def _process_file_inner(
         if info is None:
             notes.append("Библиотека ifcopenshell не установлена, поэтому даже краткие сведения из IFC не прочитаны.")
             details.append("Необязательно: pip install ifcopenshell")
+        elif info.get("error"):
+            notes.append(str(info["error"]))
+            details.append(str(info["error"]))
         else:
             details.append(f"Схема: {info.get('schema')}")
             details.append(f"Проект: {info.get('project')}")
@@ -304,11 +345,15 @@ def _process_file_inner(
         work_dxf = converted
 
     doc = _open_dxf(work_dxf)
-    to_mm = doc_to_mm(doc)
+    to_mm, units_warning = resolve_insunits(doc)
     notes.append(
         f"Единицы чертежа: $INSUNITS={doc.header.get('$INSUNITS', '?')}, "
         f"1 ед. = {to_mm:g} мм (при коде 0 принимаются миллиметры; дюймы и метры пересчитываются)."
     )
+    if units_warning:
+        notes.append(units_warning)
+    if fix:
+        _upgrade_legacy_dxf(doc, notes)
     try:
         model_count = sum(1 for _entity in doc.modelspace())
         if model_count == 0:

@@ -158,13 +158,10 @@ def working_field(ctx: CheckContext, stamp: Rect) -> Optional[Rect]:
 
 
 def _layout(ctx: CheckContext):
+    from .title_block import layout_or_model
+
     space = (ctx.frame.space if ctx.frame else "Model") or "Model"
-    if str(space).lower() == "model":
-        return ctx.doc.modelspace()
-    try:
-        return ctx.doc.layouts.get(space)
-    except Exception:
-        return ctx.doc.modelspace()
+    return layout_or_model(ctx.doc, space)
 
 
 def union_rects(rects: list[Rect]) -> Optional[Rect]:

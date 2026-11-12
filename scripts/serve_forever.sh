@@ -7,7 +7,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 mkdir -p "$ROOT/logs"
 
 LOG="$ROOT/logs/web.log"
@@ -31,20 +31,30 @@ if [[ -x "$PREFIX/bin/dwg2dxf" ]]; then
   fi
 fi
 
-if [[ -x "$ROOT/.venv/bin/python" ]]; then
+if [[ -n "${GOST_PYTHON:-}" ]]; then
+  PYTHON="$GOST_PYTHON"
+elif [[ -x "$ROOT/.venv/bin/python" ]]; then
   PYTHON="$ROOT/.venv/bin/python"
 else
-  PYTHON="$(command -v python3 || command -v python)"
+  PYTHON="$(command -v python3 || command -v python || true)"
 fi
 
 CHILD=""
 cleanup() {
+  local why="${1:-EXIT}"
   if [[ -n "${CHILD}" ]] && kill -0 "${CHILD}" 2>/dev/null; then
     kill "${CHILD}" 2>/dev/null || true
     wait "${CHILD}" 2>/dev/null || true
   fi
+  # Иначе trap проглатывает SIGTERM и цикл тут же поднимает сервер снова.
+  if [[ "$why" == "TERM" || "$why" == "INT" ]]; then
+    trap - EXIT INT TERM
+    exit 0
+  fi
 }
-trap cleanup EXIT INT TERM
+trap 'cleanup EXIT' EXIT
+trap 'cleanup INT' INT
+trap 'cleanup TERM' TERM
 
 ts() { date "+%Y-%m-%d %H:%M:%S %Z"; }
 
@@ -53,11 +63,11 @@ while true; do
   "$PYTHON" -m uvicorn gost_checker.web:app --host "$HOST" --port "$PORT" --no-access-log >> "$LOG" 2>&1 &
   CHILD=$!
   echo "${CHILD}" > "$CHILD_PID"
-  set +e
-  wait "${CHILD}"
-  code=$?
-  set -e
-  echo "[$(ts)] uvicorn (pid ${CHILD}) завершился с кодом ${code}; перезапуск через 2 с" >> "$LOG"
+  # Не включаем set -e: ненулевой код uvicorn — повод перезапустить, а не убить супервизор.
+  wait "${CHILD}" || code=$?
+  code=${code:-0}
+  echo "[$(ts)] uvicorn (pid ${CHILD}) завершился с кодом ${code}; перезапуск через ${RESTART_DELAY:-2} с" >> "$LOG"
   CHILD=""
-  sleep 2
+  code=0
+  sleep "${RESTART_DELAY:-2}"
 done

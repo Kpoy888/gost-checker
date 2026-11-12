@@ -60,6 +60,40 @@ def _ensure_tessdata() -> None:
 
 
 
+def read_raster_bgr(path: Path):
+    """Прочитать картинку без cv2.imread: тот не открывает часть путей с кириллицей."""
+    import cv2
+
+    try:
+        data = np.fromfile(str(path), dtype=np.uint8)
+    except OSError as exc:
+        raise RuntimeError(f"Не удалось прочитать изображение: {exc}") from exc
+    if data.size == 0:
+        return None
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+
+def limit_raster_size(image, max_side: Optional[int] = None):
+    """Уменьшить слишком большой скан, чтобы проверка не съела всю память."""
+    import cv2
+
+    if image is None or image.size == 0:
+        return image, 1.0
+    if max_side is None:
+        raw = os.environ.get("GOST_RASTER_MAX_SIDE", "").strip()
+        if raw.isdigit():
+            max_side = max(256, min(8000, int(raw)))
+        else:
+            max_side = max(max_image_side() * 2, 4096)
+    height, width = image.shape[:2]
+    long_side = max(height, width)
+    if long_side <= max_side or long_side <= 0:
+        return image, 1.0
+    scale = max_side / float(long_side)
+    resized = cv2.resize(image, (max(1, int(width * scale)), max(1, int(height * scale))), interpolation=cv2.INTER_AREA)
+    return resized, scale
+
+
 def read_image_dpi(path: Path) -> Optional[tuple[float, float]]:
     try:
         from PIL import Image
@@ -662,15 +696,66 @@ def rasterize_pdf_page(page, zoom: float = 2.0):
     return bgr, width, height
 
 
+def _pdf_page_score(page) -> int:
+    score = 0
+    try:
+        score += len(page.get_drawings()) * 5
+    except Exception:
+        pass
+    try:
+        text = (page.get_text("text") or "").strip()
+        score += min(len(text), 800)
+    except Exception:
+        pass
+    return score
+
+
+def _select_pdf_page(doc) -> int:
+    """Первая страница часто бывает обложкой. Берём самую «чертёжную» из первых восьми."""
+    limit = min(int(doc.page_count or 0), 8)
+    best_index = 0
+    best_score = -1
+    for index in range(limit):
+        try:
+            score = _pdf_page_score(doc[index])
+        except Exception:
+            continue
+        if score > best_score:
+            best_score = score
+            best_index = index
+    return best_index
+
+
 def process_pdf(path: Path) -> tuple[list[CheckResult], list[str], dict]:
     import fitz
 
     notes: list[str] = []
     extra: dict[str, Any] = {}
-    doc = fitz.open(str(path))
+    try:
+        doc = fitz.open(str(path))
+    except Exception as exc:
+        raise RuntimeError("PDF повреждён или не является PDF.") from exc
+    try:
+        if getattr(doc, "needs_pass", False):
+            raise RuntimeError("PDF закрыт паролем. Снимите защиту и загрузите файл снова.")
+        if int(doc.page_count or 0) < 1:
+            raise RuntimeError("В PDF нет страниц.")
+        return _process_open_pdf(doc, notes, extra)
+    finally:
+        doc.close()
+
+
+def _process_open_pdf(doc, notes: list[str], extra: dict[str, Any]) -> tuple[list[CheckResult], list[str], dict]:
     extra["pages"] = doc.page_count
-    notes.append(f"Страниц в PDF: {doc.page_count}. Проверяется первая страница.")
-    page = doc[0]
+    page_index = _select_pdf_page(doc)
+    if doc.page_count > 1 and page_index:
+        notes.append(
+            f"Страниц в PDF: {doc.page_count}. Первая страница без содержимого чертежа, "
+            f"проверяется страница {page_index + 1}."
+        )
+    else:
+        notes.append(f"Страниц в PDF: {doc.page_count}. Проверяется страница {page_index + 1}.")
+    page = doc[page_index]
     try:
         rotation = int(page.rotation or 0)
     except Exception:
@@ -699,7 +784,7 @@ def process_pdf(path: Path) -> tuple[list[CheckResult], list[str], dict]:
         image,
         w_mm,
         h_mm,
-        source=f"PDF, стр. 1, {w_mm:.1f}×{h_mm:.1f} мм",
+        source=f"PDF, стр. {page_index + 1}, {w_mm:.1f}×{h_mm:.1f} мм",
         vector_frames=vector_frames,
     )
     if vector_notes:
@@ -752,7 +837,6 @@ def process_pdf(path: Path) -> tuple[list[CheckResult], list[str], dict]:
         if check.check_id == "sheet_frame" and check.extra.get("margins"):
             extra["margins"] = check.extra["margins"]
             extra["margins_table"] = check.extra.get("margins_table")
-    doc.close()
     return checks, notes, extra
 
 
@@ -791,9 +875,7 @@ def refine_sheet_by_inner(image_bgr, page_w_mm: float, page_h_mm: float):
 
 
 def process_image(path: Path) -> tuple[list[CheckResult], list[str], dict]:
-    import cv2
-
-    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    image = read_raster_bgr(path)
     if image is None:
         raise RuntimeError(f"Не удалось открыть изображение: {path}")
     notes = [
@@ -805,6 +887,12 @@ def process_image(path: Path) -> tuple[list[CheckResult], list[str], dict]:
     if dpi:
         declared_w = image.shape[1] / dpi[0] * 25.4
         declared_h = image.shape[0] / dpi[1] * 25.4
+    image, raster_scale = limit_raster_size(image)
+    if raster_scale < 0.999:
+        notes.append(
+            "Скан уменьшен перед проверкой: исходная сторона была слишком большой для разбора в памяти."
+        )
+    if dpi:
         notes.append(
             f"DPI из метаданных файла: {dpi[0]:.0f}×{dpi[1]:.0f}, "
             f"размер кадра {declared_w:.1f}×{declared_h:.1f} мм."

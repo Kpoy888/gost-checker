@@ -18,6 +18,7 @@ from .engine import process_file
 from .report import DISCLAIMER
 
 JOBS: dict[str, tuple[Path, float]] = {}
+_ACTIVE_JOBS: set[str] = set()
 _JOBS_LOCK = threading.Lock()
 JOB_TTL_SEC = 3600
 MAX_JOBS = 24
@@ -49,22 +50,51 @@ def safe_download_name(filename: str) -> str:
 
 
 def cleanup_jobs(now: Optional[float] = None) -> int:
-    """Удалить просроченные и лишние временные каталоги заданий."""
+    """Удалить просроченные и лишние временные каталоги заданий.
+
+    Задание, которое ещё считается, не удаляется: иначе параллельный запрос
+    сотрёт каталог прямо во время проверки.
+    """
     now = time.time() if now is None else now
     removed = 0
     with _JOBS_LOCK:
-        stale = [job_id for job_id, (_path, ts) in JOBS.items() if now - ts > JOB_TTL_SEC]
-        keep = [(job_id, ts) for job_id, (_path, ts) in JOBS.items() if job_id not in stale]
-        if len(keep) >= MAX_JOBS:
-            keep.sort(key=lambda item: item[1])
-            overflow = len(keep) - (MAX_JOBS - 1)
-            stale.extend(job_id for job_id, _ts in keep[:overflow])
+        stale: list[str] = []
+        inactive: list[tuple[str, float]] = []
+        active_count = 0
+        for job_id, (_path, ts) in JOBS.items():
+            if job_id in _ACTIVE_JOBS:
+                active_count += 1
+                continue
+            if now - ts > JOB_TTL_SEC:
+                stale.append(job_id)
+            else:
+                inactive.append((job_id, ts))
+        # Одно место оставляем под задание, которое вот-вот зарегистрируют.
+        capacity = max(MAX_JOBS - 1 - active_count, 0)
+        if len(inactive) > capacity:
+            inactive.sort(key=lambda item: item[1])
+            extra = len(inactive) - capacity
+            stale.extend(job_id for job_id, _ts in inactive[:extra])
         for job_id in stale:
             path, _ts = JOBS.pop(job_id, (None, 0.0))
+            _ACTIVE_JOBS.discard(job_id)
             if path:
                 shutil.rmtree(path, ignore_errors=True)
                 removed += 1
     return removed
+
+
+def active_job_count() -> int:
+    with _JOBS_LOCK:
+        return sum(1 for job_id in _ACTIVE_JOBS if job_id in JOBS)
+
+
+def _set_active(job_id: str, active: bool) -> None:
+    with _JOBS_LOCK:
+        if active:
+            _ACTIVE_JOBS.add(job_id)
+        else:
+            _ACTIVE_JOBS.discard(job_id)
 
 
 def _register_job(job_id: str, work: Path) -> None:
@@ -129,6 +159,11 @@ def create_app() -> FastAPI:
         preview: str = Form("false"),
     ):
         cleanup_jobs()
+        if active_job_count() >= MAX_JOBS:
+            raise HTTPException(
+                status_code=429,
+                detail="Слишком много одновременных проверок. Подождите и повторите.",
+            )
         job_id = uuid.uuid4().hex
         work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
         raw_name = safe_upload_name(file.filename)
@@ -142,6 +177,7 @@ def create_app() -> FastAPI:
             shutil.rmtree(work, ignore_errors=True)
             raise HTTPException(status_code=400, detail=f"Не удалось сохранить файл: {exc}") from exc
         _register_job(job_id, work)
+        _set_active(job_id, True)
         meta = {
             "обозначение": обозначение,
             "наименование": наименование,
@@ -172,6 +208,8 @@ def create_app() -> FastAPI:
             )
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            _set_active(job_id, False)
 
         downloads = []
         mapping = [
