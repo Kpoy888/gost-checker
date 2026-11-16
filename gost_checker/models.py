@@ -22,6 +22,9 @@ class CheckResult:
     auto_fixed: bool = False
     findings_count: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
+    explanation: str = ""
+    citation: str = ""
+    explanation_source: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

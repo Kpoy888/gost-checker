@@ -115,6 +115,16 @@
     .check.warning .sev { color: var(--warn); }
     .check.error .sev { color: var(--err); }
     .check ul { margin: 8px 0 0; padding-left: 1.1rem; color: var(--muted); }
+    .explain {
+      margin-top: 10px; background: #f6f8f6; border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 12px;
+    }
+    .check.error .explain { background: #fff6f5; }
+    .check.warning .explain { background: #fffaf0; }
+    .check.ok .explain { background: #f3faf6; }
+    .explain-h { font-weight: 750; font-size: .92rem; }
+    .explain-h span { font-weight: 450; color: var(--muted); }
+    .explain-body { white-space: pre-wrap; margin-top: 6px; }
     table.gridtab { border-collapse: collapse; width: 100%; background: #fff; }
     table.gridtab th, table.gridtab td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
     table.gridtab th { background: #f4f7f5; }
@@ -150,7 +160,7 @@
       <div class="mark" aria-hidden="true">ГО</div>
       <div>
         <h1>Проверка оформления чертежа</h1>
-        <p class="lead">Бесплатный сервис для студенческих и учебных чертежей. Загрузите DXF, DWG, PDF или скан — получите отчёт по отдельным правилам СПДС / ЕСКД и, для CAD-файлов, осторожно исправленный файл. Это не официальный нормоконтроль и не «приведение любого чертежа ко всем ГОСТам».</p>
+        <p class="lead">Бесплатный сервис для студенческих и учебных чертежей. Загрузите DXF, DWG, PDF или скан — получите отчёт по отдельным правилам СПДС / ЕСКД и, для CAD-файлов, осторожно исправленный файл. Рядом с замечанием будет пояснение: что не так, зачем это правило и как поправить, со ссылкой на норму. Это не официальный нормоконтроль и не «приведение любого чертежа ко всем ГОСТам».</p>
       </div>
     </header>
 
@@ -251,7 +261,7 @@
     </section>
 
     <footer>
-      <p class="privacy" id="privacy">Загруженные файлы обрабатываются на этом сервере и автоматически удаляются примерно через час. Чертежи не передаются третьим лицам и не используются ни для чего, кроме этой проверки.</p>
+      <p class="privacy" id="privacy">Загруженные файлы обрабатываются на этом сервере и автоматически удаляются примерно через час. Чертежи не передаются третьим лицам и не используются ни для чего, кроме этой проверки. Пояснения к замечаниям собираются на этом сервере из локальной базы правил и во внешний сервис не отправляются, пока администратор сам не задал ключ языковой модели.</p>
       <p class="warn">Программа не заменяет нормоконтроль. Отчёт не является официальным заключением о соответствии ГОСТ, СПДС или ЕСКД.</p>
       <p>
         Автор: Пащенко Владимир ·
@@ -355,7 +365,8 @@ function renderResult(payload) {
       `<span class="sev">${SEV[check.severity] || check.severity || ""}</span></div>` +
       `<div class="gost">${escapeHtml(check.gost || "")}</div>` +
       `<p>${escapeHtml(check.message || "")}</p>` +
-      (details ? `<ul>${details}</ul>` : "");
+      (details ? `<ul>${details}</ul>` : "") +
+      explainBlock(check);
     box.appendChild(el);
   });
 
@@ -438,6 +449,16 @@ function formatMm(value) {
 function safeColor(value) {
   return /^#[0-9a-fA-F]{3,8}$/.test(String(value || "")) ? String(value) : "#444";
 }
+function explainBlock(check) {
+  const text = check.explanation || "";
+  if (!text) return "";
+  const source = check.explanation_source === "llm"
+    ? "языковая модель по карточке нормы"
+    : "локальная карточка нормы";
+  return `<div class="explain"><div class="explain-h">Пояснение <span>${escapeHtml(source)}</span></div>` +
+    `<div class="explain-body">${escapeHtml(text)}</div></div>`;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")

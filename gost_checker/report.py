@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
+from .explain import annotate_result, source_label
 from .models import CheckResult, ProcessResult
 
 DISCLAIMER = (
@@ -144,6 +145,7 @@ def summarize(checks: Iterable[CheckResult]) -> dict[str, int]:
 
 
 def render_markdown(result: ProcessResult) -> str:
+    annotate_result(result)
     lines = [
         "# Отчёт о проверке оформления чертежа",
         "",
@@ -189,14 +191,31 @@ def render_markdown(result: ProcessResult) -> str:
         ]
         for detail in check.details:
             lines.append(f"  - {detail}")
-        lines.append("")
+        if check.explanation:
+            lines += [
+                "",
+                f"**Пояснение** ({source_label(check.explanation_source)}):",
+                "",
+                check.explanation,
+                "",
+            ]
+        else:
+            lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
 def render_html(result: ProcessResult) -> str:
+    annotate_result(result)
     cards = []
     for check in result.checks:
         details = "".join(f"<li>{html.escape(d)}</li>" for d in check.details)
+        explain = ""
+        if check.explanation:
+            explain = (
+                "<div class='explain'><p class='explain-h'>Пояснение "
+                f"<span>{html.escape(source_label(check.explanation_source))}</span></p>"
+                f"<div class='explain-body'>{html.escape(check.explanation)}</div></div>"
+            )
         cards.append(
             f"""
             <article class="card {html.escape(check.severity)}">
@@ -210,6 +229,7 @@ def render_html(result: ProcessResult) -> str:
                  автоисправление: {"выполнено" if check.auto_fixed else "не применялось"} ·
                  может исправлять: {"да" if check.can_autofix else "нет"}</p>
               <ul>{details}</ul>
+              {explain}
             </article>
             """
         )
@@ -251,6 +271,10 @@ def render_html(result: ProcessResult) -> str:
     .gost {{ color:#4a4336; font-size:14px; }}
     .meta {{ font-size:13px; color:#5c564a; }}
     ul {{ line-height:1.45; }}
+    .explain {{ margin-top:12px; background:#f7f4ec; border:1px solid #e0d8c8; padding:12px 14px; }}
+    .explain-h {{ margin:0 0 6px; font-family:"PT Sans","Noto Sans","DejaVu Sans",sans-serif; font-weight:700; }}
+    .explain-h span {{ font-weight:400; color:#5c564a; font-size:13px; }}
+    .explain-body {{ white-space:pre-wrap; line-height:1.45; }}
   </style>
 </head>
 <body>
