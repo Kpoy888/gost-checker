@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import engine as engine_mod
 from .engine import process_file
+from .explain import annotate_result, privacy_suffix
 from .report import DISCLAIMER
 
 JOBS: dict[str, tuple[Path, float]] = {}
@@ -228,6 +229,7 @@ def create_app() -> FastAPI:
 
         extra = result.extra or {}
         overlay_name = Path(result.render_overlay).name if result.render_overlay else "lines_overlay.png"
+        annotate_result(result)
         checks = []
         for check in result.checks:
             details = list(check.details or [])
@@ -243,6 +245,9 @@ def create_app() -> FastAPI:
                     "details": details,
                     "can_autofix": check.can_autofix,
                     "auto_fixed": check.auto_fixed,
+                    "explanation": check.explanation,
+                    "citation": check.citation,
+                    "explanation_source": check.explanation_source,
                 }
             )
         return {
@@ -264,6 +269,7 @@ def create_app() -> FastAPI:
                 "Загруженный файл и результаты проверки хранятся только на этом сервере "
                 f"и автоматически удаляются через {JOB_TTL_SEC // 60} мин. "
                 "Мы не передаём чертежи третьим лицам и не используем их ни для чего, кроме этой проверки."
+                + privacy_suffix()
             ),
         }
 
