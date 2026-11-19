@@ -1,0 +1,64 @@
+# Группы функций. Группа 6 — витрина отложенного, не второй список.
+# Поле surfaces: site — страница проверки; bot — только уведомление Telegram (п.3).
+# Чат-бот (п.7) отменён.
+groups:
+  - id: 1
+    name: Проверка чертежа
+  - id: 2
+    name: Подсчёты
+  - id: 3
+    name: Оформление
+  - id: 4
+    name: Документация
+  - id: 5
+    name: Сервис
+  - id: 6
+    name: Слабые (отложены)
+    kind: view
+    refs: ["12-dwg", "13", "23", "24"]
+
+features:
+  - {id: base, name: Базовая проверка по ГОСТам, group: 1, status: done, surfaces: [site]}
+  - {id: "2", name: Подсветка ошибок, group: 1, status: done, surfaces: [site]}
+  - {id: "9", name: Разметка кружочками, group: 1, status: done, surfaces: [site]}
+  - {id: "19", name: Противоречия в размерах, group: 1, status: queued, surfaces: [site]}
+  - {id: "20", name: Минимальные расстояния, group: 1, status: queued, surfaces: [site]}
+  - {id: "18", name: Место под размер, group: 1, status: queued, surfaces: [site]}
+  - {id: "21", name: Подписи помещений и экспликация, group: 1, status: queued, surfaces: [site]}
+
+  - {id: "8", name: Объёмы из IFC, group: 2, status: done, surfaces: [site]}
+  - {id: "29", name: Автоэкспликация, group: 2, status: queued, surfaces: [site]}
+  - {id: "34", name: Ведомость расхода материалов, group: 2, status: queued, surfaces: [site]}
+  - {id: "27", name: Уклоны, group: 2, status: queued, surfaces: [site]}
+
+  - {id: "22", name: Умный штамп, group: 3, status: queued, surfaces: [site]}
+  - {id: "28", name: Автооси и размеры, group: 3, status: queued, surfaces: [site]}
+  - {id: "30", name: Стандартизация слоёв, group: 3, status: queued, surfaces: [site]}
+  - {id: "31", name: Исправление шрифтов, group: 3, status: queued, surfaces: [site]}
+  - {id: "32", name: Автомаркировка оборудования, group: 3, status: queued, surfaces: [site]}
+  - {id: "35", name: Автопростановка выносок, group: 3, status: queued, surfaces: [site]}
+
+  - {id: "33", name: Поэтажные планы из IFC, group: 4, status: queued, surfaces: [site]}
+  - {id: "23", name: Комплект из модели, group: 4, status: deferred, surfaces: [site]}
+  - {id: "24", name: Пояснительная записка, group: 4, status: deferred, surfaces: [site]}
+  - {id: "25", name: Проверка выпуска в один клик, group: 4, status: queued, surfaces: [site]}
+  - {id: "6", name: Отчёт в PDF и Excel, group: 4, status: done, surfaces: [site]}
+
+  - {id: "1", name: Пакетная загрузка, group: 5, status: done, surfaces: [site]}
+  - {id: "3", name: Уведомление в Telegram, group: 5, status: done, surfaces: [site, bot]}
+  - {id: "4", name: Сравнение версий, group: 5, status: done, surfaces: [site]}
+  - {id: "5", name: История проверок, group: 5, status: done, surfaces: [site]}
+  - {id: "13", name: Отслеживание нормативной базы, group: 5, status: deferred, surfaces: [site]}
+  - {id: "12", name: Экспорт PDF/IFC, group: 5, status: queued, surfaces: [site]}
+  - {id: "12-dwg", name: Необязательный экспорт DWG со сверкой, group: 5, status: deferred, surfaces: [site], part_of: "12"}
+
+cancelled:
+  - {id: 3d-from-2d, name: Построение 3D из 2D-чертежа}
+  - {id: "7", name: Чат-бот по ГОСТам}
+  - {id: "10", name: Совместная работа и блокировка слоёв}
+  - {id: "11", name: Версии чертежа как в Git}
+  - {id: "14", name: Типовые узлы по каталогу}
+  - {id: "15", name: Живой поиск цен}
+  - {id: "16", name: Коллизии инженерных систем}
+  - {id: "17", name: Авторазбивка на листы}
+  - {id: "26", name: Подсказки по размещению и трассировке}
