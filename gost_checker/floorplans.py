@@ -176,7 +176,7 @@ def _extent(segments, unit_scale: float) -> tuple[float, float, tuple]:
     )
 
 
-def _stamp_meta(model, storey_name: str) -> dict:
+def _stamp_meta(model, storey, unit_scale: float) -> dict:
     meta = {}
     projects = list(model.by_type("IfcProject"))
     if projects and getattr(projects[0], "Name", None):
@@ -184,8 +184,11 @@ def _stamp_meta(model, storey_name: str) -> dict:
     buildings = list(model.by_type("IfcBuilding"))
     if buildings and getattr(buildings[0], "Name", None):
         meta["здание"] = str(buildings[0].Name)
-    if storey_name:
-        meta["наименование"] = f"План {storey_name}"
+    name = str(getattr(storey, "Name", "") or "")
+    elevation = float(getattr(storey, "Elevation", 0) or 0) * unit_scale
+    if name:
+        meta["наименование"] = f"План {name} на отм. {elevation:+.3f}"
+        meta["отметка"] = f"{elevation:+.3f}"
     return meta
 
 
@@ -224,7 +227,7 @@ def _draw_sheet(path: Path, segments, bounds, sheet: dict, meta: dict, unit_scal
             dxfattribs={"layer": "ПЛАН"},
         )
     msp.add_text(
-        f"Масштаб {sheet['scale']}. {note}",
+        f"Черновик, требует проверки. Масштаб {sheet['scale']}. {note}",
         dxfattribs={"insert": (origin_x, inner.ymax - 8), "height": 3.5, "layer": "ПЛАН"},
     )
     if sheet.get("warning"):
@@ -268,7 +271,7 @@ def plans_from_ifc(src: Path, out_dir: Path, *, cut_m: float = DEFAULT_CUT_M, pe
             warning = (warning + " " + sheet["warning"]).strip()
         safe = "".join(char if char.isalnum() else "_" for char in name).strip("_") or f"storey_{index}"
         dest = out_dir / f"{index:02d}_{safe}.dxf"
-        meta = _stamp_meta(model, name)
+        meta = _stamp_meta(model, storey, unit_scale)
         _draw_sheet(dest, section["segments"], bounds, sheet, meta, unit_scale, CUT_NOTE)
         sheets.append(
             {

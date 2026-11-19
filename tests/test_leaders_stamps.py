@@ -64,9 +64,11 @@ def test_leaders_from_markup(tmp_path):
     document.close()
     pdf_before = _sha(pdf)
     checked = write_leaders(pdf, tmp_path / "nope.dxf")
-    assert checked["check_only"] and checked["written"] is False
+    assert checked["check_only"] and checked["written"] is True
     assert _sha(pdf) == pdf_before
-    assert not (tmp_path / "nope.dxf").exists()
+    assert (tmp_path / "nope.dxf").is_file()
+    produced = ezdxf.readfile(str(tmp_path / "nope.dxf"))
+    assert any(entity.dxf.layer == "АВТО_ВЫНОСКИ" for entity in produced.modelspace())
     from fastapi.testclient import TestClient
 
     from gost_checker.web import create_app

@@ -60,6 +60,19 @@ def test_layers_profile_and_yaml(tmp_path):
     assert any(entity.dxf.layer == "АР_Стены" for entity in custom_doc.modelspace())
     assert custom_doc.layers.get("АР_Стены").dxf.lineweight == 35
 
+    vague = ezdxf.new("R2010")
+    vague.layers.add("xxxстенyyy")
+    vague.modelspace().add_line((0, 0), (1, 0), dxfattribs={"layer": "xxxстенyyy"})
+    vague_path = tmp_path / "vague.dxf"
+    vague.saveas(str(vague_path))
+    vague_plan = standardize(vague_path, tmp_path / "vague-out.dxf", dry_run=False)
+    assert vague_plan["plan"] == []
+    assert vague_plan["proposals"] and vague_plan["proposals"][0]["confidence"] == "неуверенно"
+    kept = ezdxf.readfile(str(tmp_path / "vague-out.dxf"))
+    assert any(entity.dxf.layer == "xxxстенyyy" for entity in kept.modelspace())
+    again = standardize(tmp_path / "out.dxf", tmp_path / "again.dxf", dry_run=False)
+    assert again["plan"] == []
+
     from fastapi.testclient import TestClient
 
     from gost_checker.web import create_app
@@ -166,5 +179,4 @@ def test_equipment_marks(tmp_path):
     assert any(abs(value - 1.0) < 1e-6 for value in lengths)
     saved = ezdxf.readfile(str(tmp_path / "marks.dxf"))
     labels = [entity.dxf.text for entity in saved.modelspace() if entity.dxftype() == "TEXT"]
-    assert labels.count("1") == 2
-    assert "2" not in labels
+    assert labels.count("Р-1") == 2

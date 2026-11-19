@@ -83,6 +83,7 @@ def test_three_storeys_scales_and_units(tmp_path):
     assert result["sheets"][2]["segments"] == 0
     assert "без геометрии" in result["sheets"][2]["warning"]
     assert result["sheets"][0]["stamp"].get("объект") == "Дом"
+    assert "на отм. +0.000" in result["sheets"][0]["stamp"].get("наименование", "")
     assert result["sheets"][0]["stamp"].get("здание") == "Корпус"
     assert "разраб" not in result["sheets"][0]["stamp"]
     drawn = ezdxf.readfile(result["sheets"][0]["path"])
@@ -134,7 +135,7 @@ def test_materials_reuse_takeoff(tmp_path):
     import ifcopenshell.api.spatial as spatial
     import ifcopenshell.api.unit as unit
 
-    from gost_checker.materials import BRICK_VOLUME_M3, load_keywords, write_materials
+    from gost_checker.materials import BRICK_MODULE_M3, BRICK_VOLUME_M3, load_keywords, write_materials
     from gost_checker.quantities import takeoff_ifc
 
     model = project.create_file(version="IFC4")
@@ -173,8 +174,9 @@ def test_materials_reuse_takeoff(tmp_path):
     assert result["ok"]
     brick = next(row for row in result["rows"] if row["material"] == "кирпич")
     wall_volume = next(row["volume_m3"] for row in base["rows"] if row["name"] == "Кладка")
-    assert brick["quantity"] == pytest.approx(wall_volume / BRICK_VOLUME_M3, rel=0.01)
-    assert brick["source"] == "объём модели / объём одного кирпича, без нормы расхода"
+    assert brick["quantity"] == pytest.approx(wall_volume / BRICK_MODULE_M3, rel=0.01)
+    assert brick["mortar_m3"] == pytest.approx(wall_volume - (wall_volume / BRICK_MODULE_M3) * BRICK_VOLUME_M3, rel=0.02)
+    assert brick["source"].startswith("геометрическая оценка")
     plaster_row = next(row for row in result["rows"] if row["name"] == "Отделка")
     assert plaster_row["quantity"] == pytest.approx(12.5)
     assert plaster_row["source"] == "из модели"
@@ -185,21 +187,24 @@ def test_materials_reuse_takeoff(tmp_path):
     door_project = root.create_entity(door_model, ifc_class="IfcProject", name="Дом")
     unit.assign_unit(door_model, length={"is_metric": True, "raw": "METERS"})
     door_only = root.create_entity(door_model, ifc_class="IfcDoor", name="Дверь")
+    wall_only = root.create_entity(door_model, ifc_class="IfcWall", name="Стена")
     storey_only = root.create_entity(door_model, ifc_class="IfcBuildingStorey", name="Этаж 1")
     site_only = root.create_entity(door_model, ifc_class="IfcSite")
     building_only = root.create_entity(door_model, ifc_class="IfcBuilding")
     aggregate.assign_object(door_model, products=[site_only], relating_object=door_project)
     aggregate.assign_object(door_model, products=[building_only], relating_object=site_only)
     aggregate.assign_object(door_model, products=[storey_only], relating_object=building_only)
-    spatial.assign_container(door_model, products=[door_only], relating_structure=storey_only)
+    spatial.assign_container(door_model, products=[door_only, wall_only], relating_structure=storey_only)
     opening = pset.add_qto(door_model, product=door_only, name="Qto_DoorBaseQuantities")
     pset.edit_qto(door_model, qto=opening, properties={"NetArea": 2.0})
+    wall_qto = pset.add_qto(door_model, product=wall_only, name="Qto_WallBaseQuantities")
+    pset.edit_qto(door_model, qto=wall_qto, properties={"NetSideArea": 10.0})
     door_model.write(str(bare))
     openings = write_materials(bare, tmp_path / "open", plaster_thickness_m=0.02)
-    row = openings["rows"][0]
-    assert row["source"] == "проём × заданная толщина"
-    assert row["quantity"] == pytest.approx(2.0)
-    assert row["volume_m3"] == pytest.approx(0.04)
+    row = next(item for item in openings["rows"] if item["material"] == "штукатурка")
+    assert row["source"] == "расчёт"
+    assert row["quantity"] == pytest.approx(8.0)
+    assert row["volume_m3"] == pytest.approx(0.16)
 
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

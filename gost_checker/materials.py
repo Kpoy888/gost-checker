@@ -14,10 +14,12 @@ from pathlib import Path
 from .quantities import takeoff_path
 
 BRICK_M = (0.250, 0.120, 0.065)
+JOINT_M = 0.010
 BRICK_VOLUME_M3 = BRICK_M[0] * BRICK_M[1] * BRICK_M[2]
+BRICK_MODULE_M3 = (BRICK_M[0] + JOINT_M) * (BRICK_M[1] + JOINT_M) * (BRICK_M[2] + JOINT_M)
 NOTE = (
-    "Число кирпичей = объём из ведомости / объём одного кирпича 250×120×65 мм. "
-    "Норма расхода раствора не применялась. Нераспознанный материал не переименовывается."
+    "Кирпич — геометрическая оценка: размер 250×120×65 мм и шов 10 мм, раствор — остаток объёма. "
+    "Норма расхода ГЭСН не применялась. Нераспознанный материал не переименовывается."
 )
 
 DEFAULT_KEYWORDS = {
@@ -72,8 +74,11 @@ def _brick_row(row: dict) -> dict:
         "source": "недостаточно данных",
     }
     if volume:
-        item["quantity"] = round(float(volume) / BRICK_VOLUME_M3, 2)
-        item["source"] = "объём модели / объём одного кирпича, без нормы расхода"
+        count = float(volume) / BRICK_MODULE_M3
+        item["quantity"] = round(count, 2)
+        item["masonry_m3"] = round(float(volume), 4)
+        item["mortar_m3"] = round(float(volume) - count * BRICK_VOLUME_M3, 4)
+        item["source"] = "геометрическая оценка: шов 10 мм, раствор — остаток объёма"
     return item
 
 
@@ -90,24 +95,29 @@ def _plaster_from_row(row: dict) -> dict:
 
 
 def _openings(rows: list[dict], thickness_m: float | None) -> list[dict]:
-    found = []
+    """Штукатурки в модели нет: площадь стен минус проёмы, толщина задана пользователем."""
+    if not thickness_m:
+        return []
+    walls = [row for row in rows if row.get("class") in {"IfcWall", "IfcWallStandardCase"} and row.get("area_m2")]
+    if not walls:
+        return []
+    openings = 0.0
     for row in rows:
-        if row.get("class") not in {"IfcDoor", "IfcWindow"} and "проём" not in str(row.get("name") or "").casefold():
-            continue
-        area = row.get("area_m2")
-        item = {
+        if row.get("class") in {"IfcDoor", "IfcWindow", "IfcOpeningElement"}:
+            openings += float(row.get("area_m2") or 0)
+    net = max(sum(float(row["area_m2"]) for row in walls) - openings, 0.0)
+    return [
+        {
             "material": "штукатурка",
-            "name": row.get("name") or row.get("class") or "проём",
-            "storey": row.get("storey") or "",
+            "name": "стены минус проёмы",
+            "storey": walls[0].get("storey") or "",
             "unit": "м²",
-            "quantity": round(float(area), 3) if area else None,
-            "source": "проём × заданная толщина" if area and thickness_m else "недостаточно данных",
+            "quantity": round(net, 3),
+            "source": "расчёт",
             "thickness_m": thickness_m,
+            "volume_m3": round(net * float(thickness_m), 4),
         }
-        if area and thickness_m:
-            item["volume_m3"] = round(float(area) * float(thickness_m), 4)
-        found.append(item)
-    return found
+    ]
 
 
 def materials_from_takeoff(data: dict, keywords: dict, plaster_thickness_m: float | None = None) -> dict:
