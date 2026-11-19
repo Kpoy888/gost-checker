@@ -139,6 +139,14 @@ def main(argv: list[str] | None = None) -> int:
         from .equipment import equipment_cli
 
         return equipment_cli(args_list[1:])
+    if args_list and args_list[0] == "plans":
+        from .floorplans import plans_cli
+
+        return plans_cli(args_list[1:])
+    if args_list and args_list[0] == "materials":
+        from .materials import materials_cli
+
+        return materials_cli(args_list[1:])
     parser = build_parser()
     args = parser.parse_args(args_list)
     raw_inputs = list(args.input)

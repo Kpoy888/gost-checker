@@ -28,7 +28,7 @@ features:
 
   - {id: "8", name: Объёмы из IFC, group: 2, status: done, surfaces: [site]}
   - {id: "29", name: Автоэкспликация, group: 2, status: done, surfaces: [site]}
-  - {id: "34", name: Ведомость расхода материалов, group: 2, status: queued, surfaces: [site]}
+  - {id: "34", name: Ведомость расхода материалов, group: 2, status: done, surfaces: [site]}
   - {id: "27", name: Уклоны, group: 2, status: done, surfaces: [site]}
 
   - {id: "22", name: Умный штамп, group: 3, status: done, surfaces: [site]}
@@ -39,7 +39,7 @@ features:
   - {id: "35", name: Автопростановка выносок, group: 3, status: queued, surfaces: [site]}
   - {id: "36", name: Массовое обновление штампов, group: 3, status: queued, surfaces: [site]}
 
-  - {id: "33", name: Поэтажные планы из IFC, group: 4, status: queued, surfaces: [site]}
+  - {id: "33", name: Поэтажные планы из IFC, group: 4, status: done, surfaces: [site]}
   - {id: "23", name: Комплект из модели, group: 4, status: deferred, surfaces: [site]}
   - {id: "24", name: Пояснительная записка, group: 4, status: deferred, surfaces: [site]}
   - {id: "25", name: Проверка выпуска в один клик, group: 4, status: done, surfaces: [site]}

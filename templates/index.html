@@ -295,6 +295,14 @@
         <label class="opt"><input type="checkbox" name="apply" value="true"> Записать новый DXF</label>
         <div class="actions"><button class="primary" type="submit">Шрифты</button><p id="fonts-status"></p></div>
       </form>
+      <form id="plans-form">
+        <input id="plans-file" name="file" type="file" accept=".ifc,.ifczip">
+        <div class="actions"><button class="primary" type="submit">Поэтажные планы</button><p id="plans-status"></p></div>
+      </form>
+      <form id="materials-form">
+        <input id="materials-file" name="file" type="file" accept=".ifc,.ifczip,.dxf">
+        <div class="actions"><button class="primary" type="submit">Материалы</button><p id="materials-status"></p></div>
+      </form>
       <form id="equip-form">
         <input id="equip-file" name="file" type="file" accept=".dxf">
         <div class="actions"><button class="primary" type="submit">Марки оборудования</button><p id="equip-status"></p></div>
@@ -585,7 +593,7 @@ async function postTool(formId, fileId, statusId, url) {
     const res = await fetch(url, { method: "POST", body });
     const payload = await res.json();
     if (!res.ok) throw new Error(detailText(payload) || res.statusText);
-    status.textContent = payload.note || payload.profile || "Готово.";
+    status.textContent = payload.error || payload.note || payload.profile || "Готово.";
   } catch (err) {
     status.textContent = "Ошибка: " + err.message;
   }
@@ -601,6 +609,14 @@ document.getElementById("fonts-form").addEventListener("submit", (ev) => {
 document.getElementById("equip-form").addEventListener("submit", (ev) => {
   ev.preventDefault();
   postTool("equip-form", "equip-file", "equip-status", "/api/equipment");
+});
+document.getElementById("plans-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("plans-form", "plans-file", "plans-status", "/api/plans");
+});
+document.getElementById("materials-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("materials-form", "materials-file", "materials-status", "/api/materials");
 });
 
 document.getElementById("compare-go").addEventListener("click", async () => {
