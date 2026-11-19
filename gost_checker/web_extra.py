@@ -362,6 +362,42 @@ def register_extra(app) -> None:
         result.pop("geometry_rows", None)
         return result
 
+    @app.post("/api/plans")
+    async def api_plans(file: UploadFile = File(...), cut: str = Form("1.2"), per_floor: str = Form("false")):
+        from .floorplans import plans_from_ifc
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        result = await run_in_threadpool(plans_from_ifc, src, work / "plans", cut_m=float(cut or 1.2), per_floor=_bool_form(per_floor))
+        return result
+
+    @app.post("/api/materials")
+    async def api_materials(file: UploadFile = File(...), keywords: str = Form(""), plaster_thickness: str = Form("")):
+        from .materials import write_materials
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        parsed = json.loads(keywords) if keywords.strip() else None
+        thickness = float(plaster_thickness) if plaster_thickness.strip() else None
+        result = await run_in_threadpool(write_materials, src, work / "materials", parsed, thickness)
+        return result
+
     @app.get("/api/history")
     def api_history(filename: str = "", sha256: str = ""):
         return {"items": list_checks(filename=filename, sha256=sha256)}
