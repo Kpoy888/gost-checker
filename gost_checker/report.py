@@ -78,6 +78,16 @@ def _markdown_tables(result: ProcessResult) -> list[str]:
         images.append(f"- После исправления: `{_rel_name(result.render_after)}`")
     if result.render_overlay:
         images.append(f"- Схема линий: `{_rel_name(result.render_overlay)}`")
+    if getattr(result, "render_issues", None):
+        images.append(f"- Места замечаний: `{_rel_name(result.render_issues)}`")
+    numbered = (result.extra or {}).get("issues") or []
+    if numbered:
+        lines += ["", "## Перечень замечаний", ""]
+        for issue in numbered:
+            where = "есть координаты" if issue.get("bbox") else "без координат"
+            lines.append(
+                f"{issue.get('n')}. [{issue.get('severity')}] {issue.get('title')}: {issue.get('text')} ({where})"
+            )
     if images:
         lines += ["", "## Изображения", ""] + images
     return lines
@@ -123,6 +133,7 @@ def _html_tables(result: ProcessResult) -> str:
         ("До исправления", result.render_before),
         ("После исправления", result.render_after),
         ("Схема линий по типу", result.render_overlay),
+        ("Места замечаний", getattr(result, "render_issues", None)),
     ):
         if path and Path(path).exists():
             figures.append(
@@ -131,6 +142,23 @@ def _html_tables(result: ProcessResult) -> str:
             )
     if figures:
         parts.append("<h2>Изображения</h2><div class='gallery'>" + "".join(figures) + "</div>")
+    numbered = (result.extra or {}).get("issues") or []
+    if numbered:
+        rows = []
+        for issue in numbered:
+            marker = "маркер на чертеже" if issue.get("bbox") else "без координат, только в списке"
+            rows.append(
+                "<li><b>"
+                + html.escape(str(issue.get("n")))
+                + ".</b> "
+                + html.escape(str(issue.get("title") or ""))
+                + " — "
+                + html.escape(str(issue.get("text") or ""))
+                + " <span class='meta'>("
+                + html.escape(marker)
+                + ")</span></li>"
+            )
+        parts.append("<h2>Перечень замечаний</h2><ul class='issues'>" + "".join(rows) + "</ul>")
     return "".join(parts)
 
 

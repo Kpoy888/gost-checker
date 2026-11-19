@@ -30,6 +30,21 @@ class LinesCheck(BaseCheck):
             "total": summary.get("total", 0),
             "issue_count": summary.get("issue_count", 0),
         }
+        from ..issues import segments_bbox_mm
+
+        markers = []
+        for item in summary.get("items") or []:
+            if item.get("ok", True):
+                continue
+            bbox = segments_bbox_mm(item.get("segments") or [])
+            if not bbox:
+                continue
+            note = "; ".join(item.get("notes") or []) or "замечание к линии"
+            markers.append({"text": note, "bbox": bbox, "space": "mm"})
+            if len(markers) >= 20:
+                break
+        if markers:
+            extra["markers"] = markers
         findings = int(summary.get("issue_count") or 0)
         if summary.get("total", 0) == 0:
             return self.result(

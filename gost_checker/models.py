@@ -71,6 +71,7 @@ class ProcessResult:
     render_before: Optional[str] = None
     render_after: Optional[str] = None
     render_overlay: Optional[str] = None
+    render_issues: Optional[str] = None
     checks: list[CheckResult] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)

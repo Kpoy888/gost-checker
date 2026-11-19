@@ -285,6 +285,20 @@ class FontsCheck(BaseCheck):
                     "Каждая высота приведена к ближайшему значению ряда ГОСТ 2.304-81, без искусственного потолка 7 мм."
                 )
 
+        from .layout import _entity_rect
+        from ..issues import rect_marker
+
+        markers = []
+        seen_ids = set()
+        for entity, height_mm, _target, _kind in roundable:
+            if id(entity) in seen_ids:
+                continue
+            seen_ids.add(id(entity))
+            rect = _entity_rect(entity)
+            if rect is None:
+                continue
+            markers.append(rect_marker(f"{entity.dxftype()} {height_mm:.2f} мм", rect))
+        extra = {"markers": markers} if markers else {}
         findings = len(bad_styles) + len(unknown_styles) + len(roundable)
         if findings == 0:
             return self.result("ok", "Шрифты и высоты текста соответствуют проверенным правилам ГОСТ 2.304.", details)
@@ -292,4 +306,4 @@ class FontsCheck(BaseCheck):
         msg = "Есть замечания по шрифтам и/или высотам текста."
         if auto:
             msg = "Шрифты и высоты текста приведены к ряду ГОСТ 2.304 (имя шрифта ГОСТ type A)."
-        return self.result(severity, msg, details, auto_fixed=auto, findings_count=findings)
+        return self.result(severity, msg, details, auto_fixed=auto, findings_count=findings, extra=extra)

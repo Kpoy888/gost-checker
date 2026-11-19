@@ -9,6 +9,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from functools import partial
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.concurrency import run_in_threadpool
@@ -157,6 +159,7 @@ def create_app() -> FastAPI:
         утв: str = Form(""),
         организация: str = Form(""),
         preview: str = Form("false"),
+        telegram_chat_id: str = Form(""),
     ):
         cleanup_jobs()
         if active_job_count() >= MAX_JOBS:
@@ -197,14 +200,21 @@ def create_app() -> FastAPI:
         do_preview = str(preview).lower() not in {"0", "false", "no", "off"}
         try:
             result = await run_in_threadpool(
-                process_file,
-                src,
-                work / "out",
-                do_fix,
-                meta,
-                sheet_format,
-                do_preview,
-                do_assign,
+                partial(
+                    process_file,
+                    src,
+                    work / "out",
+                    fix=do_fix,
+                    title_meta=meta,
+                    assumed_format=sheet_format,
+                    render=do_preview,
+                    assign_layers=do_assign,
+                    highlight=True,
+                    export_pdf=True,
+                    export_xlsx=True,
+                    record_history=True,
+                    telegram_chat_id=telegram_chat_id,
+                )
             )
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -221,6 +231,9 @@ def create_app() -> FastAPI:
             ("Просмотр до", result.render_before, "before.png"),
             ("Просмотр после", result.render_after, "after.png"),
             ("Схема линий", result.render_overlay, "lines_overlay.png"),
+            ("Места замечаний", result.render_issues, "issues.png"),
+            ("Отчёт PDF", (result.extra or {}).get("report_pdf"), "report.pdf"),
+            ("Отчёт Excel", (result.extra or {}).get("report_xlsx"), "report.xlsx"),
         ]
         for title, path, filename in mapping:
             if path and Path(path).exists() and filename:
@@ -259,6 +272,8 @@ def create_app() -> FastAPI:
             "overlay_url": f"/api/download/{job_id}/{overlay_name}" if result.render_overlay else None,
             "before_url": f"/api/download/{job_id}/before.png" if result.render_before else None,
             "after_url": f"/api/download/{job_id}/after.png" if result.render_after else None,
+            "issues": (extra.get("issues") or []),
+            "issues_url": f"/api/download/{job_id}/issues.png" if result.render_issues else None,
             "ttl_sec": JOB_TTL_SEC,
             "privacy": (
                 "Загруженный файл и результаты проверки хранятся только на этом сервере "
@@ -296,6 +311,9 @@ def create_app() -> FastAPI:
                 return FileResponse(resolved, filename=name)
         raise HTTPException(status_code=404, detail="Файл не найден")
 
+    from .web_extra import register_extra
+
+    register_extra(app)
     return app
 
 
