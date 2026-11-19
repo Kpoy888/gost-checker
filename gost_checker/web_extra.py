@@ -398,6 +398,50 @@ def register_extra(app) -> None:
         result = await run_in_threadpool(write_materials, src, work / "materials", parsed, thickness)
         return result
 
+    @app.post("/api/leaders")
+    async def api_leaders(file: UploadFile = File(...), notes: str = Form("")):
+        from .leaders import write_leaders
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        return await run_in_threadpool(write_leaders, src, work / "leaders.dxf", notes)
+
+    @app.post("/api/stamps")
+    async def api_stamps(
+        file: UploadFile = File(...),
+        card: str = Form("{}"),
+        old_cipher: str = Form(""),
+        renumber: str = Form("false"),
+        apply: str = Form("false"),
+    ):
+        from .massstamp import update_set
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        try:
+            parsed = json.loads(card)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Карточка штампа должна быть JSON") from exc
+        return await run_in_threadpool(
+            update_set, src, work / "stamps", parsed, old_cipher=old_cipher, renumber=_bool_form(renumber), dry_run=not _bool_form(apply)
+        )
+
     @app.get("/api/history")
     def api_history(filename: str = "", sha256: str = ""):
         return {"items": list_checks(filename=filename, sha256=sha256)}

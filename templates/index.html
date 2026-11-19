@@ -303,6 +303,15 @@
         <input id="materials-file" name="file" type="file" accept=".ifc,.ifczip,.dxf">
         <div class="actions"><button class="primary" type="submit">Материалы</button><p id="materials-status"></p></div>
       </form>
+      <form id="leaders-form">
+        <input id="leaders-file" name="file" type="file" accept=".dxf,.pdf">
+        <div class="actions"><button class="primary" type="submit">Выноски</button><p id="leaders-status"></p></div>
+      </form>
+      <form id="stamps-form">
+        <input id="stamps-file" name="file" type="file" accept=".dxf,.pdf,.zip,.dwg">
+        <label class="opt"><input type="checkbox" name="apply" value="true"> Записать новые файлы</label>
+        <div class="actions"><button class="primary" type="submit">Штампы комплекта</button><p id="stamps-status"></p></div>
+      </form>
       <form id="equip-form">
         <input id="equip-file" name="file" type="file" accept=".dxf">
         <div class="actions"><button class="primary" type="submit">Марки оборудования</button><p id="equip-status"></p></div>
@@ -617,6 +626,14 @@ document.getElementById("plans-form").addEventListener("submit", (ev) => {
 document.getElementById("materials-form").addEventListener("submit", (ev) => {
   ev.preventDefault();
   postTool("materials-form", "materials-file", "materials-status", "/api/materials");
+});
+document.getElementById("leaders-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("leaders-form", "leaders-file", "leaders-status", "/api/leaders");
+});
+document.getElementById("stamps-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("stamps-form", "stamps-file", "stamps-status", "/api/stamps");
 });
 
 document.getElementById("compare-go").addEventListener("click", async () => {
