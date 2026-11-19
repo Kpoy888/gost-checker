@@ -33,9 +33,9 @@ features:
 
   - {id: "22", name: Умный штамп, group: 3, status: done, surfaces: [site]}
   - {id: "28", name: Автооси и размеры, group: 3, status: done, surfaces: [site]}
-  - {id: "30", name: Стандартизация слоёв, group: 3, status: queued, surfaces: [site]}
-  - {id: "31", name: Исправление шрифтов, group: 3, status: queued, surfaces: [site]}
-  - {id: "32", name: Автомаркировка оборудования, group: 3, status: queued, surfaces: [site]}
+  - {id: "30", name: Стандартизация слоёв, group: 3, status: done, surfaces: [site]}
+  - {id: "31", name: Исправление шрифтов, group: 3, status: done, surfaces: [site]}
+  - {id: "32", name: Автомаркировка оборудования, group: 3, status: done, surfaces: [site]}
   - {id: "35", name: Автопростановка выносок, group: 3, status: queued, surfaces: [site]}
   - {id: "36", name: Массовое обновление штампов, group: 3, status: queued, surfaces: [site]}
 
