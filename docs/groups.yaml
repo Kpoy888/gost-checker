@@ -27,12 +27,12 @@ features:
   - {id: "21", name: Подписи помещений и экспликация, group: 1, status: done, surfaces: [site]}
 
   - {id: "8", name: Объёмы из IFC, group: 2, status: done, surfaces: [site]}
-  - {id: "29", name: Автоэкспликация, group: 2, status: queued, surfaces: [site]}
+  - {id: "29", name: Автоэкспликация, group: 2, status: done, surfaces: [site]}
   - {id: "34", name: Ведомость расхода материалов, group: 2, status: queued, surfaces: [site]}
-  - {id: "27", name: Уклоны, group: 2, status: queued, surfaces: [site]}
+  - {id: "27", name: Уклоны, group: 2, status: done, surfaces: [site]}
 
   - {id: "22", name: Умный штамп, group: 3, status: done, surfaces: [site]}
-  - {id: "28", name: Автооси и размеры, group: 3, status: queued, surfaces: [site]}
+  - {id: "28", name: Автооси и размеры, group: 3, status: done, surfaces: [site]}
   - {id: "30", name: Стандартизация слоёв, group: 3, status: queued, surfaces: [site]}
   - {id: "31", name: Исправление шрифтов, group: 3, status: queued, surfaces: [site]}
   - {id: "32", name: Автомаркировка оборудования, group: 3, status: queued, surfaces: [site]}
