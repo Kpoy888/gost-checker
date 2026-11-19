@@ -224,6 +224,27 @@ def register_extra(app) -> None:
                 downloads.append({"title": title, "url": f"/api/download/{job_id}/{Path(raw).name}", "filename": Path(raw).name})
         return {"ok": data.get("ok"), "error": data.get("error"), "rows": data.get("rows") or [], "downloads": downloads}
 
+    @app.post("/api/release-check")
+    async def api_release(files: list[UploadFile] = File(...), card: str = Form("{}")):
+        from .releasecheck import release_check
+        from .stampcard import load_card
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        saved = []
+        for upload in files:
+            dest = work / safe_upload_name(upload.filename)
+            await save_upload_limited(upload, dest, engine_mod.MAX_INPUT_BYTES)
+            saved.append(dest)
+        _register_job(job_id, work)
+        try:
+            parsed = load_card(json.loads(card))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        payload = await run_in_threadpool(release_check, saved, card=parsed)
+        return {"can_release": payload["can_release"], "findings": payload["findings"], "progress": payload["progress"]}
+
     @app.post("/api/clearance")
     async def api_clearance(
         file: UploadFile = File(...),

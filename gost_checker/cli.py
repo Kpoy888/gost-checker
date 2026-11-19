@@ -103,6 +103,18 @@ def main(argv: list[str] | None = None) -> int:
         from .electrical import gaps_cli
 
         return gaps_cli(args_list[1:])
+    if args_list and args_list[0] == "rooms":
+        from .rooms import rooms_cli
+
+        return rooms_cli(args_list[1:])
+    if args_list and args_list[0] == "stamp":
+        from .stampcard import stamp_cli
+
+        return stamp_cli(args_list[1:])
+    if args_list and args_list[0] == "release-check":
+        from .releasecheck import release_cli
+
+        return release_cli(args_list[1:])
     parser = build_parser()
     args = parser.parse_args(args_list)
     raw_inputs = list(args.input)
