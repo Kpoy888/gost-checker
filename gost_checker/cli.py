@@ -95,6 +95,14 @@ def main(argv: list[str] | None = None) -> int:
         from .quantities import quantities_cli
 
         return quantities_cli(args_list[1:])
+    if args_list and args_list[0] == "clearance":
+        from .clearance import clearance_cli
+
+        return clearance_cli(args_list[1:])
+    if args_list and args_list[0] == "gaps":
+        from .electrical import gaps_cli
+
+        return gaps_cli(args_list[1:])
     parser = build_parser()
     args = parser.parse_args(args_list)
     raw_inputs = list(args.input)

@@ -80,6 +80,18 @@ def publish_result(
         if out_dir is None:
             return result
         result.extra = dict(result.extra or {})
+        try:
+            source = Path(result.input_path)
+            if source.suffix.lower() == ".dxf" and source.is_file():
+                from .clearance import check_file as clearance_check
+                from .dimconflict import check_file as dim_check
+                from .electrical import check_file as gap_check
+                from .report import summarize
+
+                result.checks.extend([clearance_check(source), dim_check(source), gap_check(source)])
+                result.summary = summarize(result.checks)
+        except Exception as exc:
+            result.notes.append(f"Дополнительные геометрические проверки пропущены: {exc}")
         result.extra["issues"] = build_issue_list(result.checks)
         result.extra["ruleset_version"] = version_label()
         try:

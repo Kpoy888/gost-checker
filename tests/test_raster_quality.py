@@ -281,6 +281,12 @@ def _ocr_hits(fields: list[dict]) -> tuple[int, int, list[str]]:
 
 
 def test_ocr_accuracy_on_demo_scans(samples_dir, tmp_path):
+    import shutil
+
+    import pytest
+
+    if shutil.which("tesseract") is None:
+        pytest.skip("бинарник tesseract не найден")
     from samples.generate import make_scan_demo
 
     generated = make_scan_demo(samples_dir / "a3_title_sample.pdf", tmp_path / "scan_gen.png", angle_deg=3.0)
