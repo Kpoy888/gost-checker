@@ -115,6 +115,18 @@ def main(argv: list[str] | None = None) -> int:
         from .releasecheck import release_cli
 
         return release_cli(args_list[1:])
+    if args_list and args_list[0] == "slopes":
+        from .slopes import slopes_cli
+
+        return slopes_cli(args_list[1:])
+    if args_list and args_list[0] == "axes":
+        from .axes import axes_cli
+
+        return axes_cli(args_list[1:])
+    if args_list and args_list[0] == "roomplan":
+        from .roomplan import roomplan_cli
+
+        return roomplan_cli(args_list[1:])
     parser = build_parser()
     args = parser.parse_args(args_list)
     raw_inputs = list(args.input)
