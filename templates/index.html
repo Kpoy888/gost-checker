@@ -257,6 +257,20 @@
       <iframe class="report" id="report" title="Отчёт HTML"></iframe>
     </section>
 
+    <section class="card">
+      <h2>Место под размер и расстояния</h2>
+      <p class="hint">10 мм от контура и 7 мм между параллельными размерами — величины ГОСТ 2.307 без номера пункта. Расстояния розеток считаются только по вашим правилам, числа ПУЭ программа не подставляет.</p>
+      <form id="place-form">
+        <input id="place-file" type="file" accept=".dxf">
+        <input name="x1" placeholder="x1" type="text">
+        <input name="y1" placeholder="y1" type="text">
+        <input name="x2" placeholder="x2" type="text">
+        <input name="y2" placeholder="y2" type="text">
+        <button class="primary" type="submit">Проверить место</button>
+        <p id="place-status"></p>
+      </form>
+    </section>
+
     <section class="card" id="qty-card">
       <h2>Объёмы</h2>
       <p class="hint">IFC из Renga или Revit (включите количества при экспорте) либо DXF: длины и площади по слоям. В ведомость попадает только то, что есть в модели.</p>
@@ -504,6 +518,24 @@ function formatMm(value) {
 function safeColor(value) {
   return /^#[0-9a-fA-F]{3,8}$/.test(String(value || "")) ? String(value) : "#444";
 }
+document.getElementById("place-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const status = document.getElementById("place-status");
+  const input = document.getElementById("place-file");
+  if (!input.files[0]) { status.textContent = "Выберите DXF."; return; }
+  const body = new FormData(ev.target);
+  body.append("file", input.files[0]);
+  status.textContent = "Проверяю…";
+  try {
+    const res = await fetch("/api/clearance", { method: "POST", body });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    status.textContent = payload.message || "Готово.";
+  } catch (err) {
+    status.textContent = "Ошибка: " + err.message;
+  }
+});
+
 document.getElementById("qty-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const status = document.getElementById("qty-status");

@@ -224,6 +224,54 @@ def register_extra(app) -> None:
                 downloads.append({"title": title, "url": f"/api/download/{job_id}/{Path(raw).name}", "filename": Path(raw).name})
         return {"ok": data.get("ok"), "error": data.get("error"), "rows": data.get("rows") or [], "downloads": downloads}
 
+    @app.post("/api/clearance")
+    async def api_clearance(
+        file: UploadFile = File(...),
+        x1: str = Form(""),
+        y1: str = Form(""),
+        x2: str = Form(""),
+        y2: str = Form(""),
+        text: str = Form("100"),
+    ):
+        from .clearance import check_file, suggest_file
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        if x1 and y1 and x2 and y2:
+            payload = await run_in_threadpool(suggest_file, src, (float(x1), float(y1)), (float(x2), float(y2)), text)
+            return payload
+        result = await run_in_threadpool(check_file, src)
+        return {"message": result.message, "details": result.details, "severity": result.severity}
+
+    @app.post("/api/gaps")
+    async def api_gaps(file: UploadFile = File(...), rules: str = Form("{}")):
+        from .electrical import check_file, load_rules
+
+        try:
+            parsed = load_rules(json.loads(rules))
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        result = await run_in_threadpool(check_file, src, parsed)
+        return {"message": result.message, "details": result.details, "severity": result.severity, "violations": (result.extra or {}).get("violations") or [], "unknown": (result.extra or {}).get("unknown") or []}
+
     @app.get("/api/history")
     def api_history(filename: str = "", sha256: str = ""):
         return {"items": list_checks(filename=filename, sha256=sha256)}

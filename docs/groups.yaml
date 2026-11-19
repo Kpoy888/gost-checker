@@ -21,9 +21,9 @@ features:
   - {id: base, name: Базовая проверка по ГОСТам, group: 1, status: done, surfaces: [site]}
   - {id: "2", name: Подсветка ошибок, group: 1, status: done, surfaces: [site]}
   - {id: "9", name: Разметка кружочками, group: 1, status: done, surfaces: [site]}
-  - {id: "19", name: Противоречия в размерах, group: 1, status: queued, surfaces: [site]}
-  - {id: "20", name: Минимальные расстояния, group: 1, status: queued, surfaces: [site]}
-  - {id: "18", name: Место под размер, group: 1, status: queued, surfaces: [site]}
+  - {id: "19", name: Противоречия в размерах, group: 1, status: done, surfaces: [site]}
+  - {id: "20", name: Минимальные расстояния, group: 1, status: done, surfaces: [site]}
+  - {id: "18", name: Место под размер, group: 1, status: done, surfaces: [site]}
   - {id: "21", name: Подписи помещений и экспликация, group: 1, status: queued, surfaces: [site]}
 
   - {id: "8", name: Объёмы из IFC, group: 2, status: done, surfaces: [site]}
