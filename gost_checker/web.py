@@ -160,6 +160,7 @@ def create_app() -> FastAPI:
         организация: str = Form(""),
         preview: str = Form("false"),
         telegram_chat_id: str = Form(""),
+        markup_notes: str = Form(""),
     ):
         cleanup_jobs()
         if active_job_count() >= MAX_JOBS:
@@ -214,6 +215,7 @@ def create_app() -> FastAPI:
                     export_xlsx=True,
                     record_history=True,
                     telegram_chat_id=telegram_chat_id,
+                    markup_notes=markup_notes,
                 )
             )
         except Exception as exc:
@@ -273,6 +275,7 @@ def create_app() -> FastAPI:
             "before_url": f"/api/download/{job_id}/before.png" if result.render_before else None,
             "after_url": f"/api/download/{job_id}/after.png" if result.render_after else None,
             "issues": (extra.get("issues") or []),
+            "markups": extra.get("markups") or [],
             "issues_url": f"/api/download/{job_id}/issues.png" if result.render_issues else None,
             "ttl_sec": JOB_TTL_SEC,
             "privacy": (
