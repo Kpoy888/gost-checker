@@ -156,12 +156,12 @@
 
     <form id="form" class="card">
       <h2>Загрузить чертёж</h2>
-      <input id="file" name="file" type="file" hidden
+      <input id="file" name="file" type="file" multiple hidden
              accept=".dxf,.dwg,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
       <input type="hidden" name="preview" value="true">
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Выбрать файл чертежа">
-        <strong>Перетащите файл сюда или нажмите, чтобы выбрать</strong>
-        <span>DXF, DWG, PDF, PNG, JPG · не больше 80 МБ</span>
+        <strong>Перетащите файлы сюда или нажмите, чтобы выбрать</strong>
+        <span>Один или несколько листов: DXF, DWG, PDF, PNG, JPG · до 8 файлов и 80 МБ суммарно</span>
         <div class="filechip" id="filechip"></div>
       </div>
 
@@ -213,6 +213,11 @@
         </div>
       </details>
 
+      <div style="margin-top:14px">
+        <label for="tg">Telegram chat_id <span class="hint">необязательно, уведомление когда проверка готова</span></label>
+        <input id="tg" name="telegram_chat_id" type="text" placeholder="например 123456789" autocomplete="off">
+      </div>
+
       <div class="actions">
         <button type="submit" class="primary" id="go">Проверить чертёж</button>
         <p id="status"></p>
@@ -250,6 +255,27 @@
       <iframe class="report" id="report" title="Отчёт HTML"></iframe>
     </section>
 
+    <section class="card" id="compare-card">
+      <h2>Сравнить две версии</h2>
+      <p class="hint">Добавленное на картинке зелёным, удалённое красным. Это не ветки правок, а сравнение двух загруженных файлов.</p>
+      <input id="file-a" type="file" accept=".dxf,.dwg,.pdf,.png,.jpg,.jpeg">
+      <input id="file-b" type="file" accept=".dxf,.dwg,.pdf,.png,.jpg,.jpeg">
+      <div class="actions">
+        <button type="button" class="primary" id="compare-go">Сравнить</button>
+        <p id="compare-status"></p>
+      </div>
+      <div id="compare-out"></div>
+    </section>
+
+    <section class="card" id="history-card">
+      <h2>История проверок</h2>
+      <p class="hint">Записи не удаляются вместе с временными файлами проверки. Можно стереть запись вручную.</p>
+      <div class="actions">
+        <button type="button" class="primary" id="history-go">Показать историю</button>
+      </div>
+      <div id="history-out"></div>
+    </section>
+
     <footer>
       <p class="privacy" id="privacy">Загруженные файлы обрабатываются на этом сервере и автоматически удаляются примерно через час. Чертежи не передаются третьим лицам и не используются ни для чего, кроме этой проверки.</p>
       <p class="warn">Программа не заменяет нормоконтроль. Отчёт не является официальным заключением о соответствии ГОСТ, СПДС или ЕСКД.</p>
@@ -267,24 +293,27 @@ const drop = document.getElementById("drop");
 const chip = document.getElementById("filechip");
 const SEV = { ok: "соответствует", info: "сведение", warning: "замечание", error: "ошибка" };
 
-function showFile(file) {
-  if (!file) { chip.style.display = "none"; return; }
+function showFile(files) {
+  const list = files ? Array.from(files) : [];
+  if (!list.length) { chip.style.display = "none"; return; }
   chip.style.display = "inline-block";
-  chip.textContent = file.name + " · " + Math.max(1, Math.round(file.size / 1024)) + " КБ";
+  const bytes = list.reduce((sum, file) => sum + file.size, 0);
+  chip.textContent = list.length + " файл(ов): " + list.map((file) => file.name).join(", ")
+    + " · " + Math.max(1, Math.round(bytes / 1024)) + " КБ";
 }
 drop.addEventListener("click", () => fileInput.click());
 drop.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fileInput.click(); } });
 ["dragenter", "dragover"].forEach((name) => drop.addEventListener(name, (ev) => { ev.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach((name) => drop.addEventListener(name, (ev) => { ev.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", (ev) => {
-  const file = ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (!file) return;
+  const dropped = ev.dataTransfer.files;
+  if (!dropped || !dropped.length) return;
   const dt = new DataTransfer();
-  dt.items.add(file);
+  Array.from(dropped).forEach((file) => dt.items.add(file));
   fileInput.files = dt.files;
-  showFile(file);
+  showFile(fileInput.files);
 });
-fileInput.addEventListener("change", () => showFile(fileInput.files[0]));
+fileInput.addEventListener("change", () => showFile(fileInput.files));
 
 function detailText(payload) {
   if (!payload || typeof payload !== "object") return "";
@@ -306,7 +335,7 @@ form.addEventListener("submit", async (ev) => {
   const status = document.getElementById("status");
   const progress = document.getElementById("progress");
   const steps = document.getElementById("steps");
-  if (!fileInput.files[0]) { status.textContent = "Выберите файл чертежа."; return; }
+  if (!fileInput.files.length) { status.textContent = "Выберите файл чертежа."; return; }
   go.disabled = true;
   progress.classList.add("on");
   steps.innerHTML = "<b>1. Загрузка</b> → 2. Проверка правил → 3. Отчёт";
@@ -315,7 +344,12 @@ form.addEventListener("submit", async (ev) => {
   if (!document.getElementById("fix").checked) data.set("fix", "false");
   const tick = setTimeout(() => { steps.innerHTML = "1. Загрузка → <b>2. Проверка правил</b> → 3. Отчёт"; status.textContent = "Проверяю оформление…"; }, 400);
   try {
-    const res = await fetch("/api/check", { method: "POST", body: data });
+    const batch = fileInput.files.length > 1;
+    if (batch) {
+      data.delete("file");
+      Array.from(fileInput.files).forEach((file) => data.append("files", file));
+    }
+    const res = await fetch(batch ? "/api/check-batch" : "/api/check", { method: "POST", body: data });
     let payload = {};
     try { payload = await res.json(); } catch (e) { payload = {}; }
     if (!res.ok) throw new Error(detailText(payload) || res.statusText || ("HTTP " + res.status));
@@ -334,6 +368,24 @@ form.addEventListener("submit", async (ev) => {
 
 function renderResult(payload) {
   document.getElementById("result").classList.remove("hidden");
+  if (payload.batch) {
+    const lines = (payload.sheets || []).map((sheet) => {
+      const s = sheet.summary || {};
+      return `<li>${escapeHtml(sheet.filename)}: ошибки ${s.error || 0}, замечания ${s.warning || 0}</li>`;
+    }).join("");
+    document.getElementById("checks").innerHTML = `<ul>${lines}</ul>`;
+    document.getElementById("summary").innerHTML = pill("файлов", (payload.totals || {}).files || 0)
+      + pill("ошибки", (payload.totals || {}).error || 0);
+    const files = document.getElementById("files");
+    files.innerHTML = "";
+    (payload.downloads || []).forEach((item) => {
+      const a = document.createElement("a");
+      a.href = item.url;
+      a.textContent = item.title;
+      files.appendChild(a);
+    });
+    return;
+  }
   const s = payload.summary || {};
   document.getElementById("summary").innerHTML =
     pill("соответствует", s.ok || 0) +
@@ -402,6 +454,7 @@ function renderResult(payload) {
     [payload.before_url, "Просмотр до исправления"],
     [payload.after_url, "Просмотр после исправления"],
     [payload.overlay_url, "Цветная схема линий"],
+    [payload.issues_url, "Места замечаний"],
   ].forEach(([url, caption]) => {
     if (!url) return;
     const fig = document.createElement("figure");
@@ -438,6 +491,48 @@ function formatMm(value) {
 function safeColor(value) {
   return /^#[0-9a-fA-F]{3,8}$/.test(String(value || "")) ? String(value) : "#444";
 }
+document.getElementById("compare-go").addEventListener("click", async () => {
+  const status = document.getElementById("compare-status");
+  const a = document.getElementById("file-a").files[0];
+  const b = document.getElementById("file-b").files[0];
+  if (!a || !b) { status.textContent = "Выберите два файла."; return; }
+  const body = new FormData();
+  body.append("file_a", a);
+  body.append("file_b", b);
+  status.textContent = "Сравниваю…";
+  try {
+    const res = await fetch("/api/compare", { method: "POST", body });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    const ent = payload.entities || {};
+    document.getElementById("compare-out").textContent =
+      "Добавлено " + (ent.added || 0) + ", удалено " + (ent.removed || 0) + ", изменено " + (ent.changed || 0);
+    status.textContent = "Готово.";
+  } catch (err) {
+    status.textContent = "Ошибка: " + err.message;
+  }
+});
+
+document.getElementById("history-go").addEventListener("click", async () => {
+  const box = document.getElementById("history-out");
+  const res = await fetch("/api/history");
+  const payload = await res.json();
+  box.innerHTML = "";
+  (payload.items || []).forEach((item) => {
+    const row = document.createElement("p");
+    row.textContent = item.created_at + " · " + item.filename + " · ошибки " + item.errors;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Удалить";
+    button.addEventListener("click", async () => {
+      await fetch("/api/history/" + item.id, { method: "DELETE" });
+      row.remove();
+    });
+    row.appendChild(button);
+    box.appendChild(row);
+  });
+});
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")

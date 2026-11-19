@@ -155,6 +155,11 @@ def process_file(
     assumed_format: str = "A3",
     render: bool = False,
     assign_layers: bool = False,
+    highlight: bool = False,
+    export_pdf: bool = False,
+    export_xlsx: bool = False,
+    record_history: bool = False,
+    telegram_chat_id: str = "",
 ) -> ProcessResult:
     raw_input = input_path
     try:
@@ -192,11 +197,21 @@ def process_file(
 
     suffix = input_path.suffix.lower()
     try:
-        return _process_file_inner(
+        result = _process_file_inner(
             input_path, out_dir, suffix, fix, title_meta, assumed_format, render, assign_layers
         )
     except Exception as exc:
-        return _error_result(input_path, out_dir, f"Не удалось обработать файл: {exc}")
+        result = _error_result(input_path, out_dir, f"Не удалось обработать файл: {exc}")
+    from .publish import publish_result
+
+    return publish_result(
+        result,
+        highlight=highlight,
+        export_pdf=export_pdf,
+        export_xlsx=export_xlsx,
+        record_history=record_history,
+        telegram_chat_id=telegram_chat_id,
+    )
 
 
 def _process_file_inner(

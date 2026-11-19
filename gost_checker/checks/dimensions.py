@@ -295,7 +295,50 @@ class DimensionsCheck(BaseCheck):
             return self.result("info", "Размерных объектов нет — стили шаблона CAD не проверялись.", details)
         if not issues:
             return self.result("ok", "Размерные стили соответствуют проверенным правилам засечек и высот.", details)
+        bad_names = {name for name, _msgs, _ds in issues if name != "__radial__"}
+        markers = []
+        seen_dim = set()
+        for layout in [ctx.doc.modelspace(), *list(ctx.doc.layouts)]:
+            if id(layout) in seen_dim:
+                continue
+            seen_dim.add(id(layout))
+            try:
+                dims = list(layout.query("DIMENSION"))
+            except Exception:
+                continue
+            for entity in dims:
+                try:
+                    style_name = str(entity.dxf.dimstyle)
+                except Exception:
+                    style_name = ""
+                if style_name not in bad_names and "__radial__" not in bad_names:
+                    continue
+                points = []
+                for attr in ("defpoint", "defpoint2", "defpoint3", "text_midpoint"):
+                    if entity.dxf.hasattr(attr):
+                        point = entity.dxf.get(attr)
+                        points.append((float(point.x), float(point.y)))
+                if not points:
+                    continue
+                xs = [p[0] for p in points]
+                ys = [p[1] for p in points]
+                markers.append(
+                    {
+                        "text": f"размер, стиль «{style_name or '—'}»",
+                        "bbox": [min(xs), min(ys), max(xs), max(ys)],
+                        "space": "model",
+                    }
+                )
+                if len(markers) >= 20:
+                    break
         msg = "Размерные стили не соответствуют правилам СПДС для засечек и/или высот текста."
         if auto:
             msg = "Размерные стили приведены к засечкам СПДС и стандартным высотам."
-        return self.result("warning", msg, details, auto_fixed=auto, findings_count=len(issues))
+        return self.result(
+            "warning",
+            msg,
+            details,
+            auto_fixed=auto,
+            findings_count=len(issues),
+            extra={"markers": markers} if markers else {},
+        )

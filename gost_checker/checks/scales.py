@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ..constants import SCALES_ENLARGEMENT, SCALES_REDUCTION
+from ..ruleset import scale_labels
 from .base import BaseCheck, CheckContext
 
 SCALE_RE = re.compile(r"(?<!\d)(\d+(?:[.,]\d+)?)\s*:\s*(\d+(?:[.,]\d+)?)(?!\d)")
@@ -18,14 +18,16 @@ def _canon(a: str, b: str) -> str:
 
 
 def _is_standard(label: str) -> bool:
-    return label in SCALES_REDUCTION or label in SCALES_ENLARGEMENT
+    red, enl = scale_labels()
+    return label in red or label in enl
 
 
 def _ratio_to_label(model_per_paper: float) -> str | None:
     if model_per_paper <= 0:
         return None
+    red, enl = scale_labels()
     candidates = []
-    for label in (*SCALES_REDUCTION, *SCALES_ENLARGEMENT):
+    for label in (*red, *enl):
         a, b = label.split(":")
         inv = float(b) / float(a)
         candidates.append((abs(model_per_paper - inv) / max(inv, 1e-9), label))
@@ -39,8 +41,9 @@ def nearest_standard_scale(ratio: float) -> tuple[str | None, float]:
     """ratio = «натуральная длина / длина на чертеже» для масштаба 1:N."""
     if ratio <= 0:
         return None, 1.0
+    red, enl = scale_labels()
     candidates = []
-    for label in (*SCALES_REDUCTION, *SCALES_ENLARGEMENT):
+    for label in (*red, *enl):
         a, b = (float(x) for x in label.split(":"))
         inv = b / a
         candidates.append((abs(inv - ratio) / max(inv, 1e-9), label))

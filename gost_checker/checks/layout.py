@@ -242,6 +242,11 @@ class LayoutOverlapCheck(BaseCheck):
         overlapping = [(entity, rect) for entity, rect in items if interiors_overlap(rect, stamp)]
         if not overlapping:
             return self.result("ok", "Содержимое чертежа не пересекается с основной надписью.", details)
+        from ..issues import rect_marker
+
+        overlap_extra = {
+            "markers": [rect_marker(describe(entity), rect) for entity, rect in overlapping[:30]]
+        }
 
         details.append("Пересекают зону штампа:")
         details.extend(f"  {describe(entity)}" for entity, _rect in overlapping[:20])
@@ -262,6 +267,7 @@ class LayoutOverlapCheck(BaseCheck):
                 f"Обнаружено наложений на штамп: {len(overlapping)}. Исправление доступно с --fix.",
                 details,
                 findings_count=len(overlapping),
+                extra=overlap_extra,
             )
 
         need_refit = bool(geometry) or (
@@ -293,6 +299,7 @@ class LayoutOverlapCheck(BaseCheck):
                 details,
                 auto_fixed=ok > 0,
                 findings_count=len(overlapping),
+                extra=overlap_extra,
             )
 
         # Только надписи: сдвигаем каждую вверх (или влево, если вверх не помещается).
@@ -316,10 +323,12 @@ class LayoutOverlapCheck(BaseCheck):
                 details,
                 auto_fixed=True,
                 findings_count=len(overlapping),
+                extra=overlap_extra,
             )
         return self.result(
             "warning",
             "Наложения на штамп обнаружены, но автоматически сдвинуть объекты не удалось.",
             details,
             findings_count=len(overlapping),
+            extra=overlap_extra,
         )
