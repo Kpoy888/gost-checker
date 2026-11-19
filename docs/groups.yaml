@@ -37,6 +37,7 @@ features:
   - {id: "31", name: Исправление шрифтов, group: 3, status: queued, surfaces: [site]}
   - {id: "32", name: Автомаркировка оборудования, group: 3, status: queued, surfaces: [site]}
   - {id: "35", name: Автопростановка выносок, group: 3, status: queued, surfaces: [site]}
+  - {id: "36", name: Массовое обновление штампов, group: 3, status: queued, surfaces: [site]}
 
   - {id: "33", name: Поэтажные планы из IFC, group: 4, status: queued, surfaces: [site]}
   - {id: "23", name: Комплект из модели, group: 4, status: deferred, surfaces: [site]}
