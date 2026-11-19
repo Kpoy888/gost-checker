@@ -24,14 +24,14 @@ features:
   - {id: "19", name: Противоречия в размерах, group: 1, status: done, surfaces: [site]}
   - {id: "20", name: Минимальные расстояния, group: 1, status: done, surfaces: [site]}
   - {id: "18", name: Место под размер, group: 1, status: done, surfaces: [site]}
-  - {id: "21", name: Подписи помещений и экспликация, group: 1, status: queued, surfaces: [site]}
+  - {id: "21", name: Подписи помещений и экспликация, group: 1, status: done, surfaces: [site]}
 
   - {id: "8", name: Объёмы из IFC, group: 2, status: done, surfaces: [site]}
   - {id: "29", name: Автоэкспликация, group: 2, status: queued, surfaces: [site]}
   - {id: "34", name: Ведомость расхода материалов, group: 2, status: queued, surfaces: [site]}
   - {id: "27", name: Уклоны, group: 2, status: queued, surfaces: [site]}
 
-  - {id: "22", name: Умный штамп, group: 3, status: queued, surfaces: [site]}
+  - {id: "22", name: Умный штамп, group: 3, status: done, surfaces: [site]}
   - {id: "28", name: Автооси и размеры, group: 3, status: queued, surfaces: [site]}
   - {id: "30", name: Стандартизация слоёв, group: 3, status: queued, surfaces: [site]}
   - {id: "31", name: Исправление шрифтов, group: 3, status: queued, surfaces: [site]}
@@ -42,7 +42,7 @@ features:
   - {id: "33", name: Поэтажные планы из IFC, group: 4, status: queued, surfaces: [site]}
   - {id: "23", name: Комплект из модели, group: 4, status: deferred, surfaces: [site]}
   - {id: "24", name: Пояснительная записка, group: 4, status: deferred, surfaces: [site]}
-  - {id: "25", name: Проверка выпуска в один клик, group: 4, status: queued, surfaces: [site]}
+  - {id: "25", name: Проверка выпуска в один клик, group: 4, status: done, surfaces: [site]}
   - {id: "6", name: Отчёт в PDF и Excel, group: 4, status: done, surfaces: [site]}
 
   - {id: "1", name: Пакетная загрузка, group: 5, status: done, surfaces: [site]}
