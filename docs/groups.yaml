@@ -50,7 +50,7 @@ features:
   - {id: "4", name: Сравнение версий, group: 5, status: done, surfaces: [site]}
   - {id: "5", name: История проверок, group: 5, status: done, surfaces: [site]}
   - {id: "13", name: Отслеживание нормативной базы, group: 5, status: deferred, surfaces: [site]}
-  - {id: "12", name: Экспорт PDF/IFC, group: 5, status: queued, surfaces: [site]}
+  - {id: "12", name: Экспорт PDF/IFC, group: 5, status: done, surfaces: [site]}
   - {id: "12-dwg", name: Необязательный экспорт DWG со сверкой, group: 5, status: deferred, surfaces: [site], part_of: "12"}
 
 cancelled:
