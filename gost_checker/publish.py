@@ -72,6 +72,7 @@ def publish_result(
     export_xlsx: bool = False,
     record_history: bool = False,
     telegram_chat_id: str = "",
+    markup_notes: str = "",
 ):
     """Не роняет уже готовую проверку: сбой дополнений только попадает в примечания."""
     try:
@@ -81,6 +82,18 @@ def publish_result(
         result.extra = dict(result.extra or {})
         result.extra["issues"] = build_issue_list(result.checks)
         result.extra["ruleset_version"] = version_label()
+        try:
+            from .markups import collect_for_result
+
+            markups = collect_for_result(result, markup_notes)
+            if markups:
+                start = len(result.extra["issues"]) + 1
+                for offset, item in enumerate(markups):
+                    item["n"] = start + offset
+                result.extra["markups"] = markups
+                result.extra["issues"] = list(result.extra["issues"]) + markups
+        except Exception as exc:
+            result.notes.append(f"Пометки пользователя не прочитаны: {exc}")
         if highlight:
             try:
                 _render(result, out_dir)

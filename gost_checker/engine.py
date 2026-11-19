@@ -160,6 +160,7 @@ def process_file(
     export_xlsx: bool = False,
     record_history: bool = False,
     telegram_chat_id: str = "",
+    markup_notes: str = "",
 ) -> ProcessResult:
     raw_input = input_path
     try:
@@ -211,6 +212,7 @@ def process_file(
         export_xlsx=export_xlsx,
         record_history=record_history,
         telegram_chat_id=telegram_chat_id,
+        markup_notes=markup_notes,
     )
 
 

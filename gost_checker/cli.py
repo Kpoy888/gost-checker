@@ -90,8 +90,13 @@ def _print_result(result) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    args_list = list(__import__("sys").argv[1:] if argv is None else argv)
+    if args_list and args_list[0] == "quantities":
+        from .quantities import quantities_cli
+
+        return quantities_cli(args_list[1:])
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(args_list)
     raw_inputs = list(args.input)
     inputs = collect_inputs(raw_inputs)
     if not inputs:

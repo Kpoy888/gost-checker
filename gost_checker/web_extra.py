@@ -188,6 +188,42 @@ def register_extra(app) -> None:
         payload["disclaimer"] = DISCLAIMER
         return payload
 
+    @app.post("/api/quantities")
+    async def api_quantities(file: UploadFile = File(...), dxf_table: str = Form("false")):
+        from .quantities import takeoff_path, write_outputs
+
+        cleanup_jobs()
+        if active_job_count() >= MAX_JOBS:
+            raise HTTPException(status_code=429, detail="Слишком много одновременных проверок. Подождите и повторите.")
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        _set_active(job_id, True)
+        try:
+            data = await run_in_threadpool(takeoff_path, src)
+            paths = await run_in_threadpool(
+                write_outputs,
+                data,
+                work / "out",
+                dxf_table=_bool_form(dxf_table),
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            _set_active(job_id, False)
+        downloads = []
+        for key, title in (("xlsx", "Ведомость Excel"), ("csv", "Ведомость CSV"), ("pdf", "Ведомость PDF"), ("dxf", "Таблица DXF")):
+            raw = paths.get(key)
+            if raw and Path(raw).is_file():
+                downloads.append({"title": title, "url": f"/api/download/{job_id}/{Path(raw).name}", "filename": Path(raw).name})
+        return {"ok": data.get("ok"), "error": data.get("error"), "rows": data.get("rows") or [], "downloads": downloads}
+
     @app.get("/api/history")
     def api_history(filename: str = "", sha256: str = ""):
         return {"items": list_checks(filename=filename, sha256=sha256)}

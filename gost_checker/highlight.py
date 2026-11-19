@@ -11,6 +11,8 @@ def _color(severity: str) -> tuple[int, int, int]:
         return (180, 40, 32)
     if severity == "warning":
         return (180, 110, 20)
+    if severity == "markup":
+        return (110, 40, 170)
     return (30, 90, 160)
 
 

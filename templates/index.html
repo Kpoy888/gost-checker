@@ -216,6 +216,8 @@
       <div style="margin-top:14px">
         <label for="tg">Telegram chat_id <span class="hint">необязательно, уведомление когда проверка готова</span></label>
         <input id="tg" name="telegram_chat_id" type="text" placeholder="например 123456789" autocomplete="off">
+        <label for="marks">Подписи к кружкам ошибок <span class="hint">например «1 — нет размера». Слой DXF: ОШИБКИ, ERRORS или MARKUP</span></label>
+        <input id="marks" name="markup_notes" type="text" autocomplete="off">
       </div>
 
       <div class="actions">
@@ -253,6 +255,17 @@
       <div class="files" id="files"></div>
       <h3>Полный отчёт</h3>
       <iframe class="report" id="report" title="Отчёт HTML"></iframe>
+    </section>
+
+    <section class="card" id="qty-card">
+      <h2>Объёмы</h2>
+      <p class="hint">IFC из Renga или Revit (включите количества при экспорте) либо DXF: длины и площади по слоям. В ведомость попадает только то, что есть в модели.</p>
+      <form id="qty-form">
+        <input id="qty-file" name="file" type="file" accept=".ifc,.ifczip,.dxf">
+        <label class="opt"><input type="checkbox" name="dxf_table" value="true"> Таблица в DXF</label>
+        <div class="actions"><button class="primary" type="submit">Посчитать объёмы</button><p id="qty-status"></p></div>
+      </form>
+      <div id="qty-out"></div>
     </section>
 
     <section class="card" id="compare-card">
@@ -491,6 +504,26 @@ function formatMm(value) {
 function safeColor(value) {
   return /^#[0-9a-fA-F]{3,8}$/.test(String(value || "")) ? String(value) : "#444";
 }
+document.getElementById("qty-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const status = document.getElementById("qty-status");
+  const input = document.getElementById("qty-file");
+  if (!input.files[0]) { status.textContent = "Выберите IFC или DXF."; return; }
+  const body = new FormData(ev.target);
+  status.textContent = "Считаю…";
+  try {
+    const res = await fetch("/api/quantities", { method: "POST", body });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    document.getElementById("qty-out").textContent = payload.ok
+      ? ("Строк: " + (payload.rows || []).length)
+      : ("Не удалось: " + (payload.error || ""));
+    status.textContent = "Готово.";
+  } catch (err) {
+    status.textContent = "Ошибка: " + err.message;
+  }
+});
+
 document.getElementById("compare-go").addEventListener("click", async () => {
   const status = document.getElementById("compare-status");
   const a = document.getElementById("file-a").files[0];
