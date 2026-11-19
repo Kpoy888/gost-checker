@@ -37,7 +37,8 @@ ALIASES = {
     "тонк": "SPDS_TON",
 }
 
-PROTECTED = {"DEFPOINTS"}
+PROTECTED = {"DEFPOINTS", "0"}
+_ENDINGS = {"", "а", "ы", "и", "ов", "ой", "ая", "ые", "s", "es"}
 
 
 def file_sha256(path: Path) -> str:
@@ -96,16 +97,24 @@ def _parse_yaml(text: str) -> dict:
     return data
 
 
-def _match(layer_name: str, layers: dict) -> dict | None:
+def _match(layer_name: str, layers: dict) -> tuple[dict | None, str]:
+    """Точный синоним применяется. Вхождение в середине имени только предлагается."""
     folded = layer_name.casefold()
     best = None
     best_len = -1
+    confidence = ""
     for key, spec in layers.items():
         token = str(key).casefold()
-        if token and token in folded and len(token) > best_len:
-            best = spec
-            best_len = len(token)
-    return best
+        if not token or token not in folded or len(token) <= best_len:
+            continue
+        if folded == token or (folded.startswith(token) and folded[len(token) :] in _ENDINGS):
+            level = "точно"
+        else:
+            level = "неуверенно"
+        best = spec
+        best_len = len(token)
+        confidence = level
+    return best, confidence
 
 
 def _ensure_linetype(doc, name: str) -> str:
@@ -128,26 +137,41 @@ def standardize(src: Path, dest: Path | None = None, profile=None, dry_run: bool
     before = file_sha256(src)
     loaded = load_profile(profile)
     doc = ezdxf.readfile(str(src))
+    used = set()
+    for owner in [doc.modelspace(), *list(doc.blocks)]:
+        try:
+            entities = list(owner)
+        except Exception:
+            continue
+        for entity in entities:
+            try:
+                used.add(str(entity.dxf.layer))
+            except Exception:
+                continue
     plan = []
+    proposals = []
     unmatched = []
     for layer in doc.layers:
         name = str(layer.dxf.name)
-        if name.upper() in PROTECTED or name.startswith("*"):
+        if name not in used or name.upper() in PROTECTED or name.startswith("*"):
             continue
-        spec = _match(name, loaded["layers"])
+        spec, confidence = _match(name, loaded["layers"])
         if not spec or not spec.get("target"):
             unmatched.append(name)
             continue
         if name == spec["target"]:
             continue
-        plan.append(
-            {
-                "from": name,
-                "to": spec["target"],
-                "linetype": spec.get("linetype") or "Continuous",
-                "lineweight_mm": float(spec.get("lineweight_mm") or 0.25),
-            }
-        )
+        item = {
+            "from": name,
+            "to": spec["target"],
+            "linetype": spec.get("linetype") or "Continuous",
+            "lineweight_mm": float(spec.get("lineweight_mm") or 0.25),
+            "confidence": confidence,
+        }
+        if confidence == "точно":
+            plan.append(item)
+        else:
+            proposals.append(item)
     written = False
     if not dry_run and dest is not None:
         by_source = {item["from"]: item for item in plan}
@@ -163,15 +187,25 @@ def standardize(src: Path, dest: Path | None = None, profile=None, dry_run: bool
                 target = doc.layers.get(item["to"])
                 target.dxf.linetype = linetype
                 target.dxf.lineweight = mm_to_lw(item["lineweight_mm"])
-        for entity in doc.modelspace():
-            item = by_source.get(str(entity.dxf.layer))
-            if not item:
+        owners = [doc.modelspace(), *list(doc.layouts), *list(doc.blocks)]
+        seen = set()
+        for owner in owners:
+            if id(owner) in seen:
                 continue
-            entity.dxf.layer = item["to"]
-            if entity.dxf.hasattr("linetype"):
-                entity.dxf.linetype = "BYLAYER"
-            if entity.dxf.hasattr("lineweight"):
-                entity.dxf.lineweight = -1
+            seen.add(id(owner))
+            try:
+                entities = list(owner)
+            except Exception:
+                continue
+            for entity in entities:
+                item = by_source.get(str(getattr(entity.dxf, "layer", "")))
+                if not item:
+                    continue
+                entity.dxf.layer = item["to"]
+                if entity.dxf.hasattr("linetype"):
+                    entity.dxf.linetype = "BYLAYER"
+                if entity.dxf.hasattr("lineweight"):
+                    entity.dxf.lineweight = -1
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(str(dest))
@@ -180,6 +214,7 @@ def standardize(src: Path, dest: Path | None = None, profile=None, dry_run: bool
         "profile": loaded["name"],
         "note": PROFILE_NOTE,
         "plan": plan,
+        "proposals": proposals,
         "unmatched": unmatched,
         "dry_run": dry_run,
         "written": written,

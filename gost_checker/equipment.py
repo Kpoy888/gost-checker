@@ -106,7 +106,7 @@ def write_equipment(src: Path, dest: Path, catalog=None) -> dict:
         )
         for point in item["points"]:
             msp.add_text(
-                str(position),
+                f"{item['mark']}-{position}",
                 dxfattribs={"insert": (point[0] + 50, point[1] + 50), "height": 250, "layer": "АВТО_МАРКИ"},
             )
         position += 1
