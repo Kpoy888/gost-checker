@@ -155,6 +155,10 @@ def main(argv: list[str] | None = None) -> int:
         from .massstamp import stamps_cli
 
         return stamps_cli(args_list[1:])
+    if args_list and args_list[0] == "export":
+        from .export_drawing import export_cli
+
+        return export_cli(args_list[1:])
     parser = build_parser()
     args = parser.parse_args(args_list)
     raw_inputs = list(args.input)

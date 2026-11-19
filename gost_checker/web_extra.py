@@ -442,6 +442,36 @@ def register_extra(app) -> None:
             update_set, src, work / "stamps", parsed, old_cipher=old_cipher, renumber=_bool_form(renumber), dry_run=not _bool_form(apply)
         )
 
+    @app.post("/api/export")
+    async def api_export(
+        file: UploadFile = File(...),
+        pdf: str = Form("false"),
+        ifc: str = Form("false"),
+        dwg: str = Form("false"),
+        version: str = Form(""),
+    ):
+        from .export_drawing import export_drawing
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        return await run_in_threadpool(
+            export_drawing,
+            src,
+            work / "export",
+            pdf=_bool_form(pdf),
+            ifc=_bool_form(ifc),
+            dwg=_bool_form(dwg),
+            version=version,
+        )
+
     @app.get("/api/history")
     def api_history(filename: str = "", sha256: str = ""):
         return {"items": list_checks(filename=filename, sha256=sha256)}

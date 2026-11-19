@@ -312,6 +312,13 @@
         <label class="opt"><input type="checkbox" name="apply" value="true"> Записать новые файлы</label>
         <div class="actions"><button class="primary" type="submit">Штампы комплекта</button><p id="stamps-status"></p></div>
       </form>
+      <form id="export-form">
+        <input id="export-file" name="file" type="file" accept=".dxf,.ifc,.ifczip">
+        <label class="opt"><input type="checkbox" name="pdf" value="true" checked> PDF</label>
+        <label class="opt"><input type="checkbox" name="ifc" value="true" checked> IFC, плоские пометки</label>
+        <label class="opt"><input type="checkbox" name="dwg" value="true"> DWG (сейчас выключен)</label>
+        <div class="actions"><button class="primary" type="submit">Экспорт</button><p id="export-status"></p></div>
+      </form>
       <form id="equip-form">
         <input id="equip-file" name="file" type="file" accept=".dxf">
         <div class="actions"><button class="primary" type="submit">Марки оборудования</button><p id="equip-status"></p></div>
@@ -634,6 +641,23 @@ document.getElementById("leaders-form").addEventListener("submit", (ev) => {
 document.getElementById("stamps-form").addEventListener("submit", (ev) => {
   ev.preventDefault();
   postTool("stamps-form", "stamps-file", "stamps-status", "/api/stamps");
+});
+document.getElementById("export-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const status = document.getElementById("export-status");
+  const input = document.getElementById("export-file");
+  if (!input.files[0]) { status.textContent = "Выберите файл."; return; }
+  const body = new FormData(ev.target);
+  status.textContent = "Собираю…";
+  try {
+    const res = await fetch("/api/export", { method: "POST", body });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    const err = (payload.errors || []).join(" ");
+    status.textContent = err || ((payload.zip ? "Архив собран. " : "") + "DWG не запрашивался.");
+  } catch (err) {
+    status.textContent = "Ошибка: " + err.message;
+  }
 });
 
 document.getElementById("compare-go").addEventListener("click", async () => {
