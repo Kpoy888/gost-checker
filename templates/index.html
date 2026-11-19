@@ -282,6 +282,25 @@
       <div id="qty-out"></div>
     </section>
 
+    <section class="card" id="drawing-tools">
+      <h2>Слои, шрифты, марки</h2>
+      <p class="hint">Профиль слоёв по умолчанию не является ISO 13567. Шрифт на PDF только проверяется. Неизвестный блок не получает выдуманное имя.</p>
+      <form id="layers-form">
+        <input id="layers-file" name="file" type="file" accept=".dxf">
+        <label class="opt"><input type="checkbox" name="apply" value="true"> Записать новый DXF</label>
+        <div class="actions"><button class="primary" type="submit">Слои</button><p id="layers-status"></p></div>
+      </form>
+      <form id="fonts-form">
+        <input id="fonts-file" name="file" type="file" accept=".dxf,.pdf,.png,.jpg">
+        <label class="opt"><input type="checkbox" name="apply" value="true"> Записать новый DXF</label>
+        <div class="actions"><button class="primary" type="submit">Шрифты</button><p id="fonts-status"></p></div>
+      </form>
+      <form id="equip-form">
+        <input id="equip-file" name="file" type="file" accept=".dxf">
+        <div class="actions"><button class="primary" type="submit">Марки оборудования</button><p id="equip-status"></p></div>
+      </form>
+    </section>
+
     <section class="card" id="compare-card">
       <h2>Сравнить две версии</h2>
       <p class="hint">Добавленное на картинке зелёным, удалённое красным. Это не ветки правок, а сравнение двух загруженных файлов.</p>
@@ -554,6 +573,34 @@ document.getElementById("qty-form").addEventListener("submit", async (ev) => {
   } catch (err) {
     status.textContent = "Ошибка: " + err.message;
   }
+});
+
+async function postTool(formId, fileId, statusId, url) {
+  const status = document.getElementById(statusId);
+  const input = document.getElementById(fileId);
+  if (!input.files[0]) { status.textContent = "Выберите файл."; return; }
+  const body = new FormData(document.getElementById(formId));
+  status.textContent = "Считаю…";
+  try {
+    const res = await fetch(url, { method: "POST", body });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(detailText(payload) || res.statusText);
+    status.textContent = payload.note || payload.profile || "Готово.";
+  } catch (err) {
+    status.textContent = "Ошибка: " + err.message;
+  }
+}
+document.getElementById("layers-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("layers-form", "layers-file", "layers-status", "/api/layers");
+});
+document.getElementById("fonts-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("fonts-form", "fonts-file", "fonts-status", "/api/fonts");
+});
+document.getElementById("equip-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  postTool("equip-form", "equip-file", "equip-status", "/api/equipment");
 });
 
 document.getElementById("compare-go").addEventListener("click", async () => {

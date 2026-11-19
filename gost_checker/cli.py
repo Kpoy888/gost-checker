@@ -127,6 +127,18 @@ def main(argv: list[str] | None = None) -> int:
         from .roomplan import roomplan_cli
 
         return roomplan_cli(args_list[1:])
+    if args_list and args_list[0] == "layers":
+        from .layerstd import layers_cli
+
+        return layers_cli(args_list[1:])
+    if args_list and args_list[0] == "fonts":
+        from .fontfix import fonts_cli
+
+        return fonts_cli(args_list[1:])
+    if args_list and args_list[0] == "equipment":
+        from .equipment import equipment_cli
+
+        return equipment_cli(args_list[1:])
     parser = build_parser()
     args = parser.parse_args(args_list)
     raw_inputs = list(args.input)

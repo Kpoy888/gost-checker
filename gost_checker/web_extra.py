@@ -293,6 +293,75 @@ def register_extra(app) -> None:
         result = await run_in_threadpool(check_file, src, parsed)
         return {"message": result.message, "details": result.details, "severity": result.severity, "violations": (result.extra or {}).get("violations") or [], "unknown": (result.extra or {}).get("unknown") or []}
 
+    @app.post("/api/layers")
+    async def api_layers(file: UploadFile = File(...), apply: str = Form("false"), profile: str = Form("")):
+        from .layerstd import load_profile, standardize
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        parsed = load_profile(json.loads(profile)) if profile.strip() else None
+        do_apply = _bool_form(apply)
+        result = await run_in_threadpool(
+            standardize, src, work / "layers.dxf", parsed, not do_apply
+        )
+        return result
+
+    @app.post("/api/fonts")
+    async def api_fonts(
+        file: UploadFile = File(...),
+        apply: str = Form("false"),
+        nearest: str = Form("false"),
+        limit_mm: str = Form("185"),
+    ):
+        from .fontfix import fix_fonts
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        result = await run_in_threadpool(
+            fix_fonts,
+            src,
+            work / "fonts.dxf",
+            mode="nearest" if _bool_form(nearest) else "up",
+            limit_mm=float(limit_mm or 185),
+            dry_run=not _bool_form(apply),
+        )
+        return result
+
+    @app.post("/api/equipment")
+    async def api_equipment(file: UploadFile = File(...), catalog: str = Form("")):
+        from .equipment import write_equipment
+
+        cleanup_jobs()
+        job_id = uuid.uuid4().hex
+        work = Path(tempfile.mkdtemp(prefix=f"gost_{job_id}_"))
+        src = work / safe_upload_name(file.filename)
+        try:
+            await save_upload_limited(file, src, engine_mod.MAX_INPUT_BYTES)
+        except HTTPException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+        _register_job(job_id, work)
+        parsed = json.loads(catalog) if catalog.strip() else None
+        result = await run_in_threadpool(write_equipment, src, work / "equipment.dxf", parsed)
+        result.pop("geometry_rows", None)
+        return result
+
     @app.get("/api/history")
     def api_history(filename: str = "", sha256: str = ""):
         return {"items": list_checks(filename=filename, sha256=sha256)}

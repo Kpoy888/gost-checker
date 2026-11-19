@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import sys
+
+if __name__ == "__main__":
+    # `python -m gost_checker.web` грузит этот файл как __main__.
+    # Иначе web_extra импортирует второй экземпляр модуля и падает на цикле.
+    sys.modules["gost_checker.web"] = sys.modules[__name__]
+
 import re
 import shutil
 import tempfile
